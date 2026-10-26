@@ -1,0 +1,41 @@
+
+#include "w25q64.h"
+
+HAL_StatusTypeDef W25Q64_ReadID(
+    SPI_HandleTypeDef *spi,
+    GPIO_TypeDef *cs_port,
+    uint16_t cs_pin,
+    uint8_t id[3]
+)
+{
+    uint8_t tx[4] = {0x9F, 0xFF, 0xFF, 0xFF};
+    uint8_t rx[4] = {0};
+
+    /* Select the flash */
+    HAL_GPIO_WritePin(
+        cs_port, cs_pin, GPIO_PIN_RESET
+    );
+
+    /* Send the command and receive four bytes */
+    HAL_StatusTypeDef result = HAL_SPI_TransmitReceive(
+        spi, tx, rx, sizeof(tx), 100
+    );
+
+    /* Finish the transaction */
+    HAL_GPIO_WritePin(
+        cs_port, cs_pin, GPIO_PIN_SET
+    );
+
+    /* Return the error if the SPI transfer failed */
+    if (result != HAL_OK)
+    {
+        return result;
+    }
+
+    /* Copy the three ID bytes into the output buffer */
+    id[0] = rx[1];
+    id[1] = rx[2];
+    id[2] = rx[3];
+
+    return HAL_OK;
+}

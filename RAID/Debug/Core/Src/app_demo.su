@@ -1,3 +1,11 @@
-../Core/Src/app_demo.c:13:13:APP_SendText	16	static
-../Core/Src/app_demo.c:30:13:APP_PrintRaidResult	160	static
-../Core/Src/app_demo.c:50:6:APP_Demo_Run	184	static
+../Core/Src/app_demo.c:17:13:APP_SendText	16	static
+../Core/Src/app_demo.c:31:13:APP_PrintResult	160	static
+../Core/Src/app_demo.c:48:16:APP_ReadLine	32	static
+../Core/Src/app_demo.c:123:16:APP_ParseBlockNumber	32	static
+../Core/Src/app_demo.c:165:13:APP_PrintStatus	176	static
+../Core/Src/app_demo.c:226:13:APP_ReadCommand	120	static
+../Core/Src/app_demo.c:290:13:APP_WriteCommand	32	static
+../Core/Src/app_demo.c:343:13:APP_VerifyCommand	128	static
+../Core/Src/app_demo.c:366:13:APP_PrintHelp	80	static
+../Core/Src/app_demo.c:396:13:APP_ProcessCommand	56	static
+../Core/Src/app_demo.c:524:6:APP_Console_Run	208	static

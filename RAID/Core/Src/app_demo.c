@@ -1,19 +1,22 @@
 #include "app_demo.h"
-
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
-/* Static arrays are stored in RAM, not on the limited MCU stack. */
-static uint8_t s_data0[RAID5_BLOCK_SIZE];
-static uint8_t s_data1[RAID5_BLOCK_SIZE];
-static uint8_t s_data2[RAID5_BLOCK_SIZE];
-static uint8_t s_readback[RAID5_BLOCK_SIZE];
+#define APP_LINE_SIZE       160U
+#define APP_MAX_TEXT_LENGTH 120U
+#define APP_RECORD_HEADER   6U
 
+static uint8_t s_cli_block[RAID5_BLOCK_SIZE];
+static uint8_t s_ignore_lf = 0U;
+
+static const uint8_t s_text_magic[4] = {
+    'T', 'X', 'T', '1'
+};
 
 static void APP_SendText(
     UART_HandleTypeDef *uart,
-    const char *text
-)
+    const char *text)
 {
     if ((uart != NULL) && (text != NULL))
     {
@@ -21,17 +24,14 @@ static void APP_SendText(
             uart,
             (uint8_t *)text,
             (uint16_t)strlen(text),
-            2000U
-        );
+            HAL_MAX_DELAY);
     }
 }
 
-
-static void APP_PrintRaidResult(
+static void APP_PrintResult(
     UART_HandleTypeDef *uart,
     const char *operation,
-    RAID5_Status result
-)
+    RAID5_Status result)
 {
     char line[128];
 
@@ -40,428 +40,573 @@ static void APP_PrintRaidResult(
         sizeof(line),
         "%s: %s\r\n",
         operation,
-        RAID5_StatusString(result)
-    );
+        RAID5_StatusString(result));
 
     APP_SendText(uart, line);
 }
 
-
-void APP_Demo_Run(
+static uint8_t APP_ReadLine(
     UART_HandleTypeDef *uart,
-    W25Q64_HandleTypeDef flashes[RAID5_DEVICE_COUNT]
-)
+    char *line,
+    uint16_t capacity)
+{
+    uint16_t length = 0U;
+
+    if ((uart == NULL) || (line == NULL) || (capacity < 2U))
+    {
+        return 0U;
+    }
+
+    while (1)
+    {
+        uint8_t ch;
+
+        if (HAL_UART_Receive(
+                uart,
+                &ch,
+                1U,
+                HAL_MAX_DELAY) != HAL_OK)
+        {
+            continue;
+        }
+
+        if (s_ignore_lf != 0U)
+        {
+            s_ignore_lf = 0U;
+
+            if (ch == '\n')
+            {
+                continue;
+            }
+        }
+
+        if (ch == '\r')
+        {
+            s_ignore_lf = 1U;
+            line[length] = '\0';
+            APP_SendText(uart, "\r\n");
+            return 1U;
+        }
+
+        if (ch == '\n')
+        {
+            line[length] = '\0';
+            APP_SendText(uart, "\r\n");
+            return 1U;
+        }
+
+        if ((ch == '\b') || (ch == 0x7FU))
+        {
+            if (length > 0U)
+            {
+                length--;
+                APP_SendText(uart, "\b \b");
+            }
+
+            continue;
+        }
+
+        if ((ch >= 32U) && (ch <= 126U) &&
+            (length < (capacity - 1U)))
+        {
+            line[length++] = (char)ch;
+
+            (void)HAL_UART_Transmit(
+                uart,
+                &ch,
+                1U,
+                HAL_MAX_DELAY);
+        }
+    }
+}
+
+static uint8_t APP_ParseBlockNumber(
+    const char *text,
+    uint32_t *block,
+    const char **end_position)
+{
+    char *end;
+    unsigned long value;
+
+    if ((text == NULL) ||
+        (block == NULL) ||
+        (text[0] < '0') ||
+        (text[0] > '9'))
+    {
+        return 0U;
+    }
+
+    value = strtoul(text, &end, 10);
+
+    if (end == text)
+    {
+        return 0U;
+    }
+
+    if (value >= RAID5_LOGICAL_BLOCK_COUNT)
+    {
+        return 0U;
+    }
+
+    *block = (uint32_t)value;
+
+    if (end_position != NULL)
+    {
+        *end_position = end;
+    }
+
+    return 1U;
+}
+
+/*
+ * Refresh physical member detection every time status is requested.
+ * This is the fix for showing a disconnected flash as ONLINE.
+ */
+static void APP_PrintStatus(UART_HandleTypeDef *uart)
 {
     uint8_t device;
-    uint32_t i;
+    uint8_t online = 0U;
+
     char line[128];
+
+    RAID5_Status result = RAID5_RefreshMembers();
+
+    if (result == RAID5_MEMBER_UNAVAILABLE)
+    {
+        APP_SendText(
+            uart,
+            "WARNING: fewer than 3 valid members detected!\r\n");
+    }
+    else if (result != RAID5_OK)
+    {
+        APP_PrintResult(uart, "Member detection", result);
+    }
+
+    APP_SendText(uart, "\r\nStorage status\r\n");
+
+    for (device = 0U;
+         device < RAID5_DEVICE_COUNT;
+         device++)
+    {
+        uint8_t available =
+            RAID5_IsMemberAvailable(device);
+
+        (void)snprintf(
+            line,
+            sizeof(line),
+            "Flash %u: %s\r\n",
+            (unsigned int)(device + 1U),
+            (available != 0U) ? "ONLINE" : "OFFLINE");
+
+        APP_SendText(uart, line);
+
+        if (available != 0U)
+        {
+            online++;
+        }
+    }
+
+    (void)snprintf(
+        line,
+        sizeof(line),
+        "Members online: %u/4\r\n"
+        "Logical blocks: %lu\r\n"
+        "Block size: %lu bytes\r\n"
+        "Mode: %s\r\n",
+        (unsigned int)online,
+        (unsigned long)RAID5_LOGICAL_BLOCK_COUNT,
+        (unsigned long)RAID5_BLOCK_SIZE,
+        (RAID5_IsDegraded() != 0U)
+            ? "DEGRADED - READ ONLY"
+            : "RAID-5 - READ/WRITE");
+
+    APP_SendText(uart, line);
+}
+
+static void APP_ReadCommand(
+    UART_HandleTypeDef *uart,
+    uint32_t logical_block)
+{
     RAID5_Status result;
+    uint16_t text_length;
+    char line[100];
+
+    result = RAID5_ReadBlock(
+        logical_block,
+        s_cli_block);
+
+    if (result != RAID5_OK)
+    {
+        APP_PrintResult(uart, "Read", result);
+        return;
+    }
+
+    (void)snprintf(
+        line,
+        sizeof(line),
+        "Logical block %lu\r\n",
+        (unsigned long)logical_block);
+
+    APP_SendText(uart, line);
+
+    if (memcmp(
+            s_cli_block,
+            s_text_magic,
+            sizeof(s_text_magic)) != 0)
+    {
+        APP_SendText(
+            uart,
+            "No console text record in this block "
+            "(unwritten or older/raw data).\r\n");
+
+        return;
+    }
+
+    text_length =
+        (uint16_t)s_cli_block[4] |
+        ((uint16_t)s_cli_block[5] << 8);
+
+    if (text_length >
+        (RAID5_BLOCK_SIZE - APP_RECORD_HEADER))
+    {
+        APP_SendText(uart, "Invalid text record length.\r\n");
+        return;
+    }
+
+    APP_SendText(uart, "Data: ");
+
+    if (text_length > 0U)
+    {
+        (void)HAL_UART_Transmit(
+            uart,
+            &s_cli_block[APP_RECORD_HEADER],
+            text_length,
+            HAL_MAX_DELAY);
+    }
+
+    APP_SendText(uart, "\r\n");
+}
+
+static void APP_WriteCommand(
+    UART_HandleTypeDef *uart,
+    uint32_t logical_block,
+    const char *text)
+{
+    size_t text_length;
+    RAID5_Status result;
+
+    if (text == NULL)
+    {
+        APP_SendText(uart, "Text is missing.\r\n");
+        return;
+    }
+
+    text_length = strlen(text);
+
+    if (text_length == 0U)
+    {
+        APP_SendText(uart, "Text cannot be empty.\r\n");
+        return;
+    }
+
+    if (text_length > APP_MAX_TEXT_LENGTH)
+    {
+        APP_SendText(
+            uart,
+            "Text is too long. Maximum is 120 characters.\r\n");
+
+        return;
+    }
+
+    memset(s_cli_block, 0xFF, sizeof(s_cli_block));
+
+    memcpy(
+        s_cli_block,
+        s_text_magic,
+        sizeof(s_text_magic));
+
+    s_cli_block[4] = (uint8_t)(text_length & 0xFFU);
+    s_cli_block[5] = (uint8_t)((text_length >> 8) & 0xFFU);
+
+    memcpy(
+        &s_cli_block[APP_RECORD_HEADER],
+        text,
+        text_length);
+
+    result = RAID5_WriteBlock(
+        logical_block,
+        s_cli_block);
+
+    APP_PrintResult(uart, "Write", result);
+}
+
+static void APP_VerifyCommand(
+    UART_HandleTypeDef *uart,
+    uint32_t logical_block)
+{
+    uint32_t stripe_index =
+        logical_block / RAID5_DATA_BLOCKS;
+
+    RAID5_Status result;
+    char line[100];
+
+    (void)snprintf(
+        line,
+        sizeof(line),
+        "Verifying stripe %lu...\r\n",
+        (unsigned long)stripe_index);
+
+    APP_SendText(uart, line);
+
+    result = RAID5_VerifyStripe(stripe_index);
+
+    APP_PrintResult(uart, "Parity verification", result);
+}
+
+static void APP_PrintHelp(UART_HandleTypeDef *uart)
+{
+    char line[64];
+
+    APP_SendText(
+        uart,
+        "\r\nCommands:\r\n"
+        "  help                   Show commands\r\n"
+        "  status                 Show RAID member status\r\n"
+        "  read <block>           Read a logical block\r\n"
+        "  write <block> <text>   Write text to a logical block\r\n"
+        "  verify <block>         Verify parity for its stripe\r\n"
+        "\r\n"
+        "Logical block range: 0 to ");
+
+    (void)snprintf(
+        line,
+        sizeof(line),
+        "%lu\r\n",
+        (unsigned long)(RAID5_LOGICAL_BLOCK_COUNT - 1UL));
+
+    APP_SendText(uart, line);
+
+    APP_SendText(
+        uart,
+        "Text writes accept up to 120 characters.\r\n"
+        "Writes require all four flash members online.\r\n"
+        "Normal startup does not erase storage.\r\n");
+}
+
+static void APP_ProcessCommand(
+    UART_HandleTypeDef *uart,
+    char *line)
+{
+    char *command = line;
+
+    while (*command == ' ')
+    {
+        command++;
+    }
+
+    {
+        size_t length = strlen(command);
+
+        while ((length > 0U) &&
+               (command[length - 1U] == ' '))
+        {
+            command[length - 1U] = '\0';
+            length--;
+        }
+    }
+
+    if (command[0] == '\0')
+    {
+        return;
+    }
+
+    if (strcmp(command, "help") == 0)
+    {
+        APP_PrintHelp(uart);
+        return;
+    }
+
+    if (strcmp(command, "status") == 0)
+    {
+        APP_PrintStatus(uart);
+        return;
+    }
+
+    if (strncmp(command, "read ", 5U) == 0)
+    {
+        uint32_t block;
+        const char *end_position;
+
+        if (!APP_ParseBlockNumber(
+                command + 5U,
+                &block,
+                &end_position) ||
+            (*end_position != '\0'))
+        {
+            APP_SendText(
+                uart,
+                "Usage: read <logical_block>\r\n");
+            return;
+        }
+
+        APP_ReadCommand(uart, block);
+        return;
+    }
+
+    if (strncmp(command, "write ", 6U) == 0)
+    {
+        uint32_t block;
+        const char *end_position;
+        const char *text;
+
+        if (!APP_ParseBlockNumber(
+                command + 6U,
+                &block,
+                &end_position))
+        {
+            APP_SendText(
+                uart,
+                "Usage: write <logical_block> <text>\r\n");
+            return;
+        }
+
+        if (*end_position != ' ')
+        {
+            APP_SendText(
+                uart,
+                "Usage: write <logical_block> <text>\r\n");
+            return;
+        }
+
+        text = end_position;
+
+        while (*text == ' ')
+        {
+            text++;
+        }
+
+        if (*text == '\0')
+        {
+            APP_SendText(
+                uart,
+                "Enter text after the block number.\r\n");
+            return;
+        }
+
+        APP_WriteCommand(uart, block, text);
+        return;
+    }
+
+    if (strncmp(command, "verify ", 7U) == 0)
+    {
+        uint32_t block;
+        const char *end_position;
+
+        if (!APP_ParseBlockNumber(
+                command + 7U,
+                &block,
+                &end_position) ||
+            (*end_position != '\0'))
+        {
+            APP_SendText(
+                uart,
+                "Usage: verify <logical_block>\r\n");
+            return;
+        }
+
+        APP_VerifyCommand(uart, block);
+        return;
+    }
+
+    APP_SendText(uart, "Unknown command. Type help.\r\n");
+}
+
+void APP_Console_Run(
+    UART_HandleTypeDef *uart,
+    W25Q64_HandleTypeDef flashes[RAID5_DEVICE_COUNT])
+{
+    uint8_t device;
+    RAID5_Status result;
+    char line[APP_LINE_SIZE];
 
     if ((uart == NULL) || (flashes == NULL))
     {
         return;
     }
 
-    APP_SendText(uart, "\r\nSTM32 RAID-5 flash demo\r\n");
-    APP_SendText(uart, "Checking four W25Q64FV devices...\r\n");
+    APP_SendText(
+        uart,
+        "\r\nSTM32F401RE RAID-5 Storage Console\r\n"
+        "Checking W25Q64FV members...\r\n");
 
-    /* Step 1: Check the IDs of all four flash chips. */
-    for (device = 0U; device < RAID5_DEVICE_COUNT; device++)
+    for (device = 0U;
+         device < RAID5_DEVICE_COUNT;
+         device++)
     {
         uint8_t id[3] = {0U, 0U, 0U};
 
         HAL_StatusTypeDef flash_result =
             W25Q64_ReadID(&flashes[device], id);
 
-        if (flash_result != HAL_OK)
+        if ((flash_result == HAL_OK) &&
+            (id[0] == 0xEFU) &&
+            (id[1] == 0x40U) &&
+            (id[2] == 0x17U))
         {
             (void)snprintf(
                 line,
                 sizeof(line),
-                "Flash %u ID read failed (%d)\r\n",
+                "Flash %u ID: %02X %02X %02X\r\n",
                 (unsigned int)(device + 1U),
-                (int)flash_result
-            );
-
-            APP_SendText(uart, line);
-            return;
+                (unsigned int)id[0],
+                (unsigned int)id[1],
+                (unsigned int)id[2]);
         }
-
-        (void)snprintf(
-            line,
-            sizeof(line),
-            "Flash %u ID: %02X %02X %02X\r\n",
-            (unsigned int)(device + 1U),
-            (unsigned int)id[0],
-            (unsigned int)id[1],
-            (unsigned int)id[2]
-        );
+        else
+        {
+            (void)snprintf(
+                line,
+                sizeof(line),
+                "Flash %u unavailable/invalid ID: "
+                "%02X %02X %02X\r\n",
+                (unsigned int)(device + 1U),
+                (unsigned int)id[0],
+                (unsigned int)id[1],
+                (unsigned int)id[2]);
+        }
 
         APP_SendText(uart, line);
     }
 
-
-    /* Step 2: Initialize the RAID layer. */
     result = RAID5_Init(flashes);
 
-    APP_PrintRaidResult(uart, "RAID initialization", result);
+    APP_PrintResult(uart, "RAID initialization", result);
 
     if (result != RAID5_OK)
     {
+        APP_SendText(
+            uart,
+            "Cannot start storage: fewer than three valid members.\r\n");
         return;
     }
 
-
-    /* Step 3: Prepare three reproducible data patterns. */
-    for (i = 0U; i < RAID5_BLOCK_SIZE; i++)
-    {
-        s_data0[i] = (uint8_t)(i & 0xFFU);
-        s_data1[i] = (uint8_t)(((i * 3U) + 7U) & 0xFFU);
-        s_data2[i] = (uint8_t)(0xA5U ^ (i & 0xFFU));
-    }
-
-
-    /* Step 4: Write stripe 0. */
     APP_SendText(
         uart,
-        "Writing demo stripe 0 (uses physical address "
-        "0x004000 on each chip)...\r\n"
-    );
+        "Startup does not erase or rewrite stored data.\r\n");
 
-    APP_SendText(
-        uart,
-        "WARNING: stripe 0 is erased and rewritten "
-        "on each MCU reset.\r\n"
-    );
+    APP_PrintStatus(uart);
+    APP_PrintHelp(uart);
 
-    result = RAID5_WriteStripe(
-        0U,
-        s_data0,
-        s_data1,
-        s_data2
-    );
-
-    APP_PrintRaidResult(uart, "Write stripe 0", result);
-
-    if (result != RAID5_OK)
+    while (1)
     {
-        return;
-    }
+        APP_SendText(uart, "\r\nRAID> ");
 
-
-    /* Step 5: Read and verify logical block 0. */
-    result = RAID5_ReadBlock(0U, s_readback);
-
-    if ((result == RAID5_OK) &&
-        (memcmp(s_readback, s_data0, RAID5_BLOCK_SIZE) == 0))
-    {
-        APP_SendText(uart, "Read logical block 0: PASS\r\n");
-    }
-    else
-    {
-        APP_PrintRaidResult(uart, "Read logical block 0", result);
-        APP_SendText(uart, "Readback compare block 0: FAIL\r\n");
-        return;
-    }
-
-
-    /* Step 6: Read and verify logical block 1. */
-    result = RAID5_ReadBlock(1U, s_readback);
-
-    if ((result == RAID5_OK) &&
-        (memcmp(s_readback, s_data1, RAID5_BLOCK_SIZE) == 0))
-    {
-        APP_SendText(uart, "Read logical block 1: PASS\r\n");
-    }
-    else
-    {
-        APP_PrintRaidResult(uart, "Read logical block 1", result);
-        APP_SendText(uart, "Readback compare block 1: FAIL\r\n");
-        return;
-    }
-
-
-    /* Step 7: Read and verify logical block 2. */
-    result = RAID5_ReadBlock(2U, s_readback);
-
-    if ((result == RAID5_OK) &&
-        (memcmp(s_readback, s_data2, RAID5_BLOCK_SIZE) == 0))
-    {
-        APP_SendText(uart, "Read logical block 2: PASS\r\n");
-    }
-    else
-    {
-        APP_PrintRaidResult(uart, "Read logical block 2", result);
-        APP_SendText(uart, "Readback compare block 2: FAIL\r\n");
-        return;
-    }
-
-
-    /* Step 8: Verify the parity for stripe 0. */
-    result = RAID5_VerifyStripe(0U);
-
-    APP_PrintRaidResult(
-        uart,
-        "Stripe 0 parity verification",
-        result
-    );
-
-    if (result != RAID5_OK)
-    {
-        return;
-    }
-
-
-    /*
-     * Step 9: Simulate Flash 1 failure.
-     * Flash 1 contains logical data block 0 in stripe 0.
-     */
-    APP_SendText(
-        uart,
-        "\r\nTesting Flash 1 unavailable...\r\n"
-    );
-
-    result = RAID5_SetMemberAvailable(0U, 0U);
-
-    if (result == RAID5_OK)
-    {
-        result = RAID5_ReadBlock(0U, s_readback);
-    }
-
-    /* Restore Flash 1 in software. */
-    (void)RAID5_SetMemberAvailable(0U, 1U);
-
-    if ((result == RAID5_OK) &&
-        (memcmp(s_readback, s_data0, RAID5_BLOCK_SIZE) == 0))
-    {
-        APP_SendText(
-            uart,
-            "Flash 1 failure recovery: PASS\r\n"
-        );
-    }
-    else
-    {
-        APP_PrintRaidResult(
-            uart,
-            "Flash 1 failure recovery",
-            result
-        );
-
-        APP_SendText(
-            uart,
-            "Flash 1 failure recovery: FAIL\r\n"
-        );
-    }
-
-
-    /*
-     * Step 10: Simulate Flash 2 failure.
-     * Flash 2 contains logical data block 1 in stripe 0.
-     */
-    APP_SendText(
-        uart,
-        "\r\nTesting Flash 2 unavailable...\r\n"
-    );
-
-    result = RAID5_SetMemberAvailable(1U, 0U);
-
-    if (result == RAID5_OK)
-    {
-        result = RAID5_ReadBlock(1U, s_readback);
-    }
-
-    /* Restore Flash 2 in software. */
-    (void)RAID5_SetMemberAvailable(1U, 1U);
-
-    if ((result == RAID5_OK) &&
-        (memcmp(s_readback, s_data1, RAID5_BLOCK_SIZE) == 0))
-    {
-        APP_SendText(
-            uart,
-            "Flash 2 failure recovery: PASS\r\n"
-        );
-    }
-    else
-    {
-        APP_PrintRaidResult(
-            uart,
-            "Flash 2 failure recovery",
-            result
-        );
-
-        APP_SendText(
-            uart,
-            "Flash 2 failure recovery: FAIL\r\n"
-        );
-    }
-
-
-    /*
-     * Step 11: Simulate Flash 3 failure.
-     * Flash 3 contains logical data block 2 in stripe 0.
-     */
-    APP_SendText(
-        uart,
-        "\r\nTesting Flash 3 unavailable...\r\n"
-    );
-
-    result = RAID5_SetMemberAvailable(2U, 0U);
-
-    if (result == RAID5_OK)
-    {
-        result = RAID5_ReadBlock(2U, s_readback);
-    }
-
-    /* Restore Flash 3 in software. */
-    (void)RAID5_SetMemberAvailable(2U, 1U);
-
-    if ((result == RAID5_OK) &&
-        (memcmp(s_readback, s_data2, RAID5_BLOCK_SIZE) == 0))
-    {
-        APP_SendText(
-            uart,
-            "Flash 3 failure recovery: PASS\r\n"
-        );
-    }
-    else
-    {
-        APP_PrintRaidResult(
-            uart,
-            "Flash 3 failure recovery",
-            result
-        );
-
-        APP_SendText(
-            uart,
-            "Flash 3 failure recovery: FAIL\r\n"
-        );
-    }
-
-
-    /*
-     * Step 12: Simulate Flash 4 failure.
-     * Flash 4 contains parity in stripe 0.
-     *
-     * The three data blocks should remain readable
-     * because their physical devices are available.
-     */
-    APP_SendText(
-        uart,
-        "\r\nTesting with parity member unavailable...\r\n"
-    );
-
-    result = RAID5_SetMemberAvailable(3U, 0U);
-
-    if (result == RAID5_OK)
-    {
-        /* Verify block 0. */
-        result = RAID5_ReadBlock(0U, s_readback);
-
-        if ((result == RAID5_OK) &&
-            (memcmp(s_readback, s_data0, RAID5_BLOCK_SIZE) == 0))
+        if (APP_ReadLine(
+                uart,
+                line,
+                sizeof(line)) != 0U)
         {
-            APP_SendText(
-                uart,
-                "Block 0 with parity unavailable: PASS\r\n"
-            );
-        }
-        else
-        {
-            APP_PrintRaidResult(
-                uart,
-                "Block 0 read with parity unavailable",
-                result
-            );
-
-            APP_SendText(
-                uart,
-                "Block 0 with parity unavailable: FAIL\r\n"
-            );
-        }
-
-
-        /* Verify block 1. */
-        result = RAID5_ReadBlock(1U, s_readback);
-
-        if ((result == RAID5_OK) &&
-            (memcmp(s_readback, s_data1, RAID5_BLOCK_SIZE) == 0))
-        {
-            APP_SendText(
-                uart,
-                "Block 1 with parity unavailable: PASS\r\n"
-            );
-        }
-        else
-        {
-            APP_PrintRaidResult(
-                uart,
-                "Block 1 read with parity unavailable",
-                result
-            );
-
-            APP_SendText(
-                uart,
-                "Block 1 with parity unavailable: FAIL\r\n"
-            );
-        }
-
-
-        /* Verify block 2. */
-        result = RAID5_ReadBlock(2U, s_readback);
-
-        if ((result == RAID5_OK) &&
-            (memcmp(s_readback, s_data2, RAID5_BLOCK_SIZE) == 0))
-        {
-            APP_SendText(
-                uart,
-                "Block 2 with parity unavailable: PASS\r\n"
-            );
-        }
-        else
-        {
-            APP_PrintRaidResult(
-                uart,
-                "Block 2 read with parity unavailable",
-                result
-            );
-
-            APP_SendText(
-                uart,
-                "Block 2 with parity unavailable: FAIL\r\n"
-            );
+            APP_ProcessCommand(uart, line);
         }
     }
-    else
-    {
-        APP_PrintRaidResult(
-            uart,
-            "Parity-member test setup",
-            result
-        );
-    }
-
-    /* Restore Flash 4 in software. */
-    (void)RAID5_SetMemberAvailable(3U, 1U);
-
-
-    /* Step 13: Verify the stripe again after restoring all members. */
-    result = RAID5_VerifyStripe(0U);
-
-    APP_PrintRaidResult(
-        uart,
-        "Final stripe 0 parity verification",
-        result
-    );
-
-
-    APP_SendText(
-        uart,
-        "\r\nFailure tests finished.\r\n"
-    );
-
-    APP_SendText(
-        uart,
-        "Demo finished. Reset to run the destructive "
-        "stripe-0 demo again.\r\n"
-    );
 }

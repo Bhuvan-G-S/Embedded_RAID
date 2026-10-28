@@ -17,6 +17,8 @@
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
 #include "string.h"
+#include "w25q64.h"
+#include "raid5.h"
 #include "app_demo.h"
 /* USER CODE END Includes */
 
@@ -71,23 +73,28 @@ int main(void)
 
     /* USER CODE BEGIN 2 */
 
-    /* Configuration for the four flash chips */
+    /* Configuration for the four W25Q64FV flash chips */
     W25Q64_HandleTypeDef flashes[RAID5_DEVICE_COUNT] =
     {
-        {&hspi1, GPIOB, GPIO_PIN_6},  /* Flash 1 */
-        {&hspi1, GPIOC, GPIO_PIN_7},  /* Flash 2 */
-        {&hspi1, GPIOA, GPIO_PIN_9},  /* Flash 3 */
-        {&hspi1, GPIOA, GPIO_PIN_8}   /* Flash 4 */
+        {&hspi1, GPIOB, GPIO_PIN_6},  /* Flash 1: PB6 */
+        {&hspi1, GPIOC, GPIO_PIN_7},  /* Flash 2: PC7 */
+        {&hspi1, GPIOA, GPIO_PIN_9},  /* Flash 3: PA9 */
+        {&hspi1, GPIOA, GPIO_PIN_8}   /* Flash 4: PA8 */
     };
 
-    /* Keep all flash chips deselected */
+    /* Ensure all flash chips are deselected */
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_SET);
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
 
-    /* Run the RAID demonstration once */
-    APP_Demo_Run(&huart2, flashes);
+    /*
+     * Start the interactive RAID-5 storage console.
+     *
+     * Commands are entered through USART2 at 115200 baud.
+     * The console does not automatically erase stored data.
+     */
+    APP_Console_Run(&huart2, flashes);
 
     /* USER CODE END 2 */
 
@@ -114,11 +121,12 @@ void SystemClock_Config(void)
 
     /* Configure the main internal regulator output voltage */
     __HAL_RCC_PWR_CLK_ENABLE();
+
     __HAL_PWR_VOLTAGESCALING_CONFIG(
         PWR_REGULATOR_VOLTAGE_SCALE2
     );
 
-    /* Initialize the RCC Oscillators */
+    /* Initialize the RCC oscillators */
     RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
     RCC_OscInitStruct.HSIState = RCC_HSI_ON;
     RCC_OscInitStruct.HSICalibrationValue =
@@ -235,7 +243,7 @@ static void MX_GPIO_Init(void)
         GPIO_PIN_SET
     );
 
-    /* Configure Flash 2 CS */
+    /* Configure Flash 2 CS: PC7 */
     GPIO_InitStruct.Pin = FLASH_CS2_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -246,7 +254,7 @@ static void MX_GPIO_Init(void)
         &GPIO_InitStruct
     );
 
-    /* Configure Flash 3 and Flash 4 CS */
+    /* Configure Flash 3 and Flash 4 CS: PA9 and PA8 */
     GPIO_InitStruct.Pin = FLASH_CS4_Pin | FLASH_CS3_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -254,7 +262,7 @@ static void MX_GPIO_Init(void)
 
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-    /* Configure Flash 1 CS */
+    /* Configure Flash 1 CS: PB6 */
     GPIO_InitStruct.Pin = FLASH_CS1_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -288,7 +296,7 @@ void Error_Handler(void)
 /**
   * @brief Reports the source file and line number of an assert error.
   * @param file: source file name
-  * @param line: source line number
+  * @param line: assert error line number
   */
 void assert_failed(uint8_t *file, uint32_t line)
 {

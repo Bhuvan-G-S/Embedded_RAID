@@ -3,12 +3,10 @@
 
 #include "stm32f4xx_hal.h"
 
-/* W25Q64FV geometry */
 #define W25Q64_CAPACITY_BYTES  (8UL * 1024UL * 1024UL)
 #define W25Q64_SECTOR_SIZE     4096UL
 #define W25Q64_PAGE_SIZE       256UL
 
-/* One flash device's SPI and chip-select configuration. */
 typedef struct
 {
     SPI_HandleTypeDef *spi;
@@ -18,36 +16,30 @@ typedef struct
 
 HAL_StatusTypeDef W25Q64_ReadID(
     W25Q64_HandleTypeDef *flash,
-    uint8_t id[3]
-);
+    uint8_t id[3]);
 
 HAL_StatusTypeDef W25Q64_ReadStatus(
     W25Q64_HandleTypeDef *flash,
-    uint8_t *status_byte
-);
+    uint8_t *status_byte);
 
 HAL_StatusTypeDef W25Q64_WaitReady(
     W25Q64_HandleTypeDef *flash,
-    uint32_t timeout_ms
-);
+    uint32_t timeout_ms);
 
 HAL_StatusTypeDef W25Q64_Read(
     W25Q64_HandleTypeDef *flash,
     uint32_t address,
     uint8_t *data,
-    uint32_t length
-);
+    uint32_t length);
 
 HAL_StatusTypeDef W25Q64_Program(
     W25Q64_HandleTypeDef *flash,
     uint32_t address,
     const uint8_t *data,
-    uint32_t length
-);
+    uint32_t length);
 
 HAL_StatusTypeDef W25Q64_EraseSector(
     W25Q64_HandleTypeDef *flash,
-    uint32_t sector_address
-);
+    uint32_t sector_address);
 
-#endif /* W25Q64_H */
+#endif

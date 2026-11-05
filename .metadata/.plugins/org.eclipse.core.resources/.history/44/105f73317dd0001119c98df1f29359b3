@@ -1,9 +1,0 @@
-#include "w25q64.h"
-#include "main.c"
-#include "stm32f4xx_hal.h"
-HAL_StatusTypeDef W25Q64_ReadID( SPI_HandleTypeDef *spi, GPIO_TypeDef *cs_port, uint16_t cs_pin,uint8_t id[3]);
-
-uint8_t tx[4] ={0x9F,0x00,0x00,0x00,0x00};
-uint8_t rx[1] ={0};
-HAL_GPIO_WritePin(cs_port,cs_pin,RESET);
-

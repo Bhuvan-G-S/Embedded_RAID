@@ -27,25 +27,25 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   ALLOC
  11 .ARM.attributes 00000030  00000000  00000000  0000705c  2**0
                   CONTENTS, READONLY
- 12 .debug_info   0000b703  00000000  00000000  0000708c  2**0
+ 12 .debug_info   0000b746  00000000  00000000  0000708c  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 13 .debug_abbrev 00001dd1  00000000  00000000  0001278f  2**0
+ 13 .debug_abbrev 00001dcb  00000000  00000000  000127d2  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 14 .debug_aranges 00000998  00000000  00000000  00014560  2**3
+ 14 .debug_aranges 00000998  00000000  00000000  000145a0  2**3
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 15 .debug_rnglists 00000759  00000000  00000000  00014ef8  2**0
+ 15 .debug_rnglists 00000759  00000000  00000000  00014f38  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 16 .debug_macro  0001636f  00000000  00000000  00015651  2**0
+ 16 .debug_macro  0001636f  00000000  00000000  00015691  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 17 .debug_line   0000c088  00000000  00000000  0002b9c0  2**0
+ 17 .debug_line   0000c0ea  00000000  00000000  0002ba00  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 18 .debug_str    0008761a  00000000  00000000  00037a48  2**0
+ 18 .debug_str    0008761a  00000000  00000000  00037aea  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 19 .comment      00000043  00000000  00000000  000bf062  2**0
+ 19 .comment      00000043  00000000  00000000  000bf104  2**0
                   CONTENTS, READONLY
- 20 .debug_frame  00002b40  00000000  00000000  000bf0a8  2**2
+ 20 .debug_frame  00002b40  00000000  00000000  000bf148  2**2
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 21 .debug_line_str 0000005a  00000000  00000000  000c1be8  2**0
+ 21 .debug_line_str 0000005a  00000000  00000000  000c1c88  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
 
 Disassembly of section .text:
@@ -450,8 +450,8 @@ Disassembly of section .text:
  80005da:	bf00      	nop
 
 080005dc <APP_SendText>:
-};
-
+ * excluding the terminating '\0'.
+ */
 static void APP_SendText(
     UART_HandleTypeDef *uart,
     const char *text)
@@ -491,7 +491,7 @@ static void APP_SendText(
  800060e:	bd80      	pop	{r7, pc}
 
 08000610 <APP_PrintResult>:
-
+ */
 static void APP_PrintResult(
     UART_HandleTypeDef *uart,
     const char *operation,
@@ -535,7 +535,7 @@ static void APP_PrintResult(
  800064c:	08005048 	.word	0x08005048
 
 08000650 <APP_ReadLine>:
-
+ */
 static uint8_t APP_ReadLine(
     UART_HandleTypeDef *uart,
     char *line,
@@ -567,10 +567,10 @@ static uint8_t APP_ReadLine(
  8000674:	2300      	movs	r3, #0
  8000676:	e066      	b.n	8000746 <APP_ReadLine+0xf6>
 
-    while (1)
-    {
-        uint8_t ch;
-
+        /*
+         * Receive one byte from USART2.
+         * HAL_MAX_DELAY makes this a blocking receive operation.
+         */
         if (HAL_UART_Receive(
  8000678:	f107 0115 	add.w	r1, r7, #21
  800067c:	f04f 33ff 	mov.w	r3, #4294967295
@@ -580,11 +580,11 @@ static uint8_t APP_ReadLine(
  8000688:	4603      	mov	r3, r0
  800068a:	2b00      	cmp	r3, #0
  800068c:	d155      	bne.n	800073a <APP_ReadLine+0xea>
-                HAL_MAX_DELAY) != HAL_OK)
-        {
-            continue;
-        }
 
+        /*
+         * If the previous character was '\r', ignore a following
+         * '\n'. This handles terminals that send CR+LF.
+         */
         if (s_ignore_lf != 0U)
  800068e:	4b30      	ldr	r3, [pc, #192]	@ (8000750 <APP_ReadLine+0x100>)
  8000690:	781b      	ldrb	r3, [r3, #0]
@@ -600,11 +600,11 @@ static uint8_t APP_ReadLine(
  800069c:	7d7b      	ldrb	r3, [r7, #21]
  800069e:	2b0a      	cmp	r3, #10
  80006a0:	d04d      	beq.n	800073e <APP_ReadLine+0xee>
-            {
-                continue;
             }
         }
 
+
+        /* Carriage return marks the end of the command. */
         if (ch == '\r')
  80006a2:	7d7b      	ldrb	r3, [r7, #21]
  80006a4:	2b0d      	cmp	r3, #13
@@ -614,21 +614,27 @@ static uint8_t APP_ReadLine(
  80006a8:	4b29      	ldr	r3, [pc, #164]	@ (8000750 <APP_ReadLine+0x100>)
  80006aa:	2201      	movs	r2, #1
  80006ac:	701a      	strb	r2, [r3, #0]
+
+            /* Add the null terminator to complete the C string. */
             line[length] = '\0';
  80006ae:	8afb      	ldrh	r3, [r7, #22]
  80006b0:	68ba      	ldr	r2, [r7, #8]
  80006b2:	4413      	add	r3, r2
  80006b4:	2200      	movs	r2, #0
  80006b6:	701a      	strb	r2, [r3, #0]
+
             APP_SendText(uart, "\r\n");
  80006b8:	4926      	ldr	r1, [pc, #152]	@ (8000754 <APP_ReadLine+0x104>)
  80006ba:	68f8      	ldr	r0, [r7, #12]
  80006bc:	f7ff ff8e 	bl	80005dc <APP_SendText>
+
             return 1U;
  80006c0:	2301      	movs	r3, #1
  80006c2:	e040      	b.n	8000746 <APP_ReadLine+0xf6>
         }
 
+
+        /* Also accept terminals that send only line feed. */
         if (ch == '\n')
  80006c4:	7d7b      	ldrb	r3, [r7, #21]
  80006c6:	2b0a      	cmp	r3, #10
@@ -640,15 +646,20 @@ static uint8_t APP_ReadLine(
  80006ce:	4413      	add	r3, r2
  80006d0:	2200      	movs	r2, #0
  80006d2:	701a      	strb	r2, [r3, #0]
+
             APP_SendText(uart, "\r\n");
  80006d4:	491f      	ldr	r1, [pc, #124]	@ (8000754 <APP_ReadLine+0x104>)
  80006d6:	68f8      	ldr	r0, [r7, #12]
  80006d8:	f7ff ff80 	bl	80005dc <APP_SendText>
+
             return 1U;
  80006dc:	2301      	movs	r3, #1
  80006de:	e032      	b.n	8000746 <APP_ReadLine+0xf6>
-        }
-
+         * Handle Backspace and Delete.
+         *
+         * Reduce the stored character count by one and update
+         * the terminal display.
+         */
         if ((ch == '\b') || (ch == 0x7FU))
  80006e0:	7d7b      	ldrb	r3, [r7, #21]
  80006e2:	2b08      	cmp	r3, #8
@@ -666,6 +677,7 @@ static uint8_t APP_ReadLine(
  80006f2:	8afb      	ldrh	r3, [r7, #22]
  80006f4:	3b01      	subs	r3, #1
  80006f6:	82fb      	strh	r3, [r7, #22]
+
                 APP_SendText(uart, "\b \b");
  80006f8:	4917      	ldr	r1, [pc, #92]	@ (8000758 <APP_ReadLine+0x108>)
  80006fa:	68f8      	ldr	r0, [r7, #12]
@@ -674,8 +686,11 @@ static uint8_t APP_ReadLine(
 
             continue;
  8000700:	e01f      	b.n	8000742 <APP_ReadLine+0xf2>
-        }
-
+        /*
+         * Accept printable ASCII characters only.
+         *
+         * capacity - 1 leaves one byte for the terminating '\0'.
+         */
         if ((ch >= 32U) && (ch <= 126U) &&
  8000702:	7d7b      	ldrb	r3, [r7, #21]
  8000704:	2b1f      	cmp	r3, #31
@@ -701,6 +716,7 @@ static uint8_t APP_ReadLine(
  8000724:	7d7a      	ldrb	r2, [r7, #21]
  8000726:	701a      	strb	r2, [r3, #0]
 
+            /* Echo the received character to the terminal. */
             (void)HAL_UART_Transmit(
  8000728:	f107 0115 	add.w	r1, r7, #21
  800072c:	f04f 33ff 	mov.w	r3, #4294967295
@@ -734,7 +750,7 @@ static uint8_t APP_ReadLine(
  8000758:	08005058 	.word	0x08005058
 
 0800075c <APP_ParseBlockNumber>:
-
+ */
 static uint8_t APP_ParseBlockNumber(
     const char *text,
     uint32_t *block,
@@ -773,8 +789,11 @@ static uint8_t APP_ParseBlockNumber(
         return 0U;
  8000784:	2300      	movs	r3, #0
  8000786:	e01e      	b.n	80007c6 <APP_ParseBlockNumber+0x6a>
-    }
-
+     *
+     * Base 10 means the number is interpreted as decimal.
+     * 'end' receives the address of the first character
+     * that was not part of the number.
+     */
     value = strtoul(text, &end, 10);
  8000788:	f107 0310 	add.w	r3, r7, #16
  800078c:	220a      	movs	r2, #10
@@ -794,6 +813,8 @@ static uint8_t APP_ParseBlockNumber(
  80007a2:	e010      	b.n	80007c6 <APP_ParseBlockNumber+0x6a>
     }
 
+
+    /* Reject logical block numbers outside the RAID capacity. */
     if (value >= RAID5_LOGICAL_BLOCK_COUNT)
  80007a4:	697b      	ldr	r3, [r7, #20]
  80007a6:	f241 72f3 	movw	r2, #6131	@ 0x17f3
@@ -805,11 +826,17 @@ static uint8_t APP_ParseBlockNumber(
  80007b0:	e009      	b.n	80007c6 <APP_ParseBlockNumber+0x6a>
     }
 
+
+    /* Store the converted number in the caller's variable. */
     *block = (uint32_t)value;
  80007b2:	68bb      	ldr	r3, [r7, #8]
  80007b4:	697a      	ldr	r2, [r7, #20]
  80007b6:	601a      	str	r2, [r3, #0]
-
+     * Return where number parsing stopped.
+     *
+     * For "write 5 Hello", this points to the space
+     * immediately after the number 5.
+     */
     if (end_position != NULL)
  80007b8:	687b      	ldr	r3, [r7, #4]
  80007ba:	2b00      	cmp	r3, #0
@@ -831,9 +858,9 @@ static uint8_t APP_ParseBlockNumber(
 	...
 
 080007d0 <APP_PrintStatus>:
-/*
- * Refresh physical member detection every time status is requested.
- * This is the fix for showing a disconnected flash as ONLINE.
+ *
+ * Then display each member's availability and the current
+ * storage operating mode.
  */
 static void APP_PrintStatus(UART_HandleTypeDef *uart)
 {
@@ -846,8 +873,10 @@ static void APP_PrintStatus(UART_HandleTypeDef *uart)
  80007d8:	2300      	movs	r3, #0
  80007da:	f887 308e 	strb.w	r3, [r7, #142]	@ 0x8e
 
-    char line[128];
-
+    /*
+     * Recheck all four flash chips by reading their JEDEC IDs.
+     * The RAID layer updates its member availability array.
+     */
     RAID5_Status result = RAID5_RefreshMembers();
  80007de:	f000 fd75 	bl	80012cc <RAID5_RefreshMembers>
  80007e2:	4603      	mov	r3, r0
@@ -879,11 +908,14 @@ static void APP_PrintStatus(UART_HandleTypeDef *uart)
  800080c:	f7ff ff00 	bl	8000610 <APP_PrintResult>
     }
 
+
     APP_SendText(uart, "\r\nStorage status\r\n");
  8000810:	492f      	ldr	r1, [pc, #188]	@ (80008d0 <APP_PrintStatus+0x100>)
  8000812:	6878      	ldr	r0, [r7, #4]
  8000814:	f7ff fee2 	bl	80005dc <APP_SendText>
 
+
+    /* Display the status of each physical flash member. */
     for (device = 0U;
  8000818:	2300      	movs	r3, #0
  800081a:	f887 308f 	strb.w	r3, [r7, #143]	@ 0x8f
@@ -942,9 +974,11 @@ static void APP_PrintStatus(UART_HandleTypeDef *uart)
  800087c:	f897 308f 	ldrb.w	r3, [r7, #143]	@ 0x8f
  8000880:	2b03      	cmp	r3, #3
  8000882:	d9cd      	bls.n	8000820 <APP_PrintStatus+0x50>
-        }
-    }
 
+    /*
+     * Display the total number of available members,
+     * logical storage capacity and current operating mode.
+     */
     (void)snprintf(
  8000884:	f897 408e 	ldrb.w	r4, [r7, #142]	@ 0x8e
         "Block size: %lu bytes\r\n"
@@ -995,7 +1029,8 @@ static void APP_PrintStatus(UART_HandleTypeDef *uart)
  80008e8:	08005100 	.word	0x08005100
 
 080008ec <APP_ReadCommand>:
-
+ * contains a text record created by this console.
+ */
 static void APP_ReadCommand(
     UART_HandleTypeDef *uart,
     uint32_t logical_block)
@@ -1005,10 +1040,11 @@ static void APP_ReadCommand(
  80008f0:	af00      	add	r7, sp, #0
  80008f2:	6078      	str	r0, [r7, #4]
  80008f4:	6039      	str	r1, [r7, #0]
-    RAID5_Status result;
     uint16_t text_length;
     char line[100];
 
+
+    /* Read the requested logical block into the RAM buffer. */
     result = RAID5_ReadBlock(
  80008f6:	492d      	ldr	r1, [pc, #180]	@ (80009ac <APP_ReadCommand+0xc0>)
  80008f8:	6838      	ldr	r0, [r7, #0]
@@ -1033,6 +1069,7 @@ static void APP_ReadCommand(
  800091a:	e044      	b.n	80009a6 <APP_ReadCommand+0xba>
     }
 
+
     (void)snprintf(
  800091c:	f107 0008 	add.w	r0, r7, #8
  8000920:	683b      	ldr	r3, [r7, #0]
@@ -1049,7 +1086,11 @@ static void APP_ReadCommand(
  800092e:	4619      	mov	r1, r3
  8000930:	6878      	ldr	r0, [r7, #4]
  8000932:	f7ff fe53 	bl	80005dc <APP_SendText>
-
+     * Check the first four bytes for the "TXT1" identifier.
+     *
+     * If the identifier does not match, the block may contain
+     * raw data or data that was not written through this console.
+     */
     if (memcmp(
  8000936:	2204      	movs	r2, #4
  8000938:	491f      	ldr	r1, [pc, #124]	@ (80009b8 <APP_ReadCommand+0xcc>)
@@ -1072,8 +1113,10 @@ static void APP_ReadCommand(
 
         return;
  800094e:	e02a      	b.n	80009a6 <APP_ReadCommand+0xba>
-    }
-
+     * The length is stored in little-endian format:
+     * Byte 4 contains the lower 8 bits.
+     * Byte 5 contains the upper 8 bits.
+     */
     text_length =
         (uint16_t)s_cli_block[4] |
  8000950:	4b16      	ldr	r3, [pc, #88]	@ (80009ac <APP_ReadCommand+0xc0>)
@@ -1091,6 +1134,10 @@ static void APP_ReadCommand(
     text_length =
  8000964:	f8a7 306c 	strh.w	r3, [r7, #108]	@ 0x6c
 
+    /*
+     * Make sure the stored length does not extend beyond
+     * the available text area of the 4 KB block.
+     */
     if (text_length >
  8000968:	f8b7 306c 	ldrh.w	r3, [r7, #108]	@ 0x6c
  800096c:	f640 72fa 	movw	r2, #4090	@ 0xffa
@@ -1106,6 +1153,8 @@ static void APP_ReadCommand(
  800097c:	e013      	b.n	80009a6 <APP_ReadCommand+0xba>
     }
 
+
+    /* Display the text stored after the six-byte record header. */
     APP_SendText(uart, "Data: ");
  800097e:	4911      	ldr	r1, [pc, #68]	@ (80009c4 <APP_ReadCommand+0xd8>)
  8000980:	6878      	ldr	r0, [r7, #4]
@@ -1146,7 +1195,7 @@ static void APP_ReadCommand(
  80009cc:	08005054 	.word	0x08005054
 
 080009d0 <APP_WriteCommand>:
-
+ */
 static void APP_WriteCommand(
     UART_HandleTypeDef *uart,
     uint32_t logical_block,
@@ -1174,6 +1223,8 @@ static void APP_WriteCommand(
  80009ea:	e037      	b.n	8000a5c <APP_WriteCommand+0x8c>
     }
 
+
+    /* Calculate the number of characters in the message. */
     text_length = strlen(text);
  80009ec:	6878      	ldr	r0, [r7, #4]
  80009ee:	f7ff fc01 	bl	80001f4 <strlen>
@@ -1192,6 +1243,8 @@ static void APP_WriteCommand(
  8000a02:	e02b      	b.n	8000a5c <APP_WriteCommand+0x8c>
     }
 
+
+    /* Enforce the console's 120-character text limit. */
     if (text_length > APP_MAX_TEXT_LENGTH)
  8000a04:	697b      	ldr	r3, [r7, #20]
  8000a06:	2b78      	cmp	r3, #120	@ 0x78
@@ -1206,23 +1259,29 @@ static void APP_WriteCommand(
 
         return;
  8000a12:	e023      	b.n	8000a5c <APP_WriteCommand+0x8c>
-    }
-
+     *
+     * Unused space remains erased-value data.
+     * This also ensures that bytes from an earlier message
+     * do not remain in the new record.
+     */
     memset(s_cli_block, 0xFF, sizeof(s_cli_block));
  8000a14:	f44f 5280 	mov.w	r2, #4096	@ 0x1000
  8000a18:	21ff      	movs	r1, #255	@ 0xff
  8000a1a:	4815      	ldr	r0, [pc, #84]	@ (8000a70 <APP_WriteCommand+0xa0>)
  8000a1c:	f003 fe70 	bl	8004700 <memset>
 
+
+    /* Store the text record identifier in the first four bytes. */
     memcpy(
  8000a20:	4a13      	ldr	r2, [pc, #76]	@ (8000a70 <APP_WriteCommand+0xa0>)
  8000a22:	4b14      	ldr	r3, [pc, #80]	@ (8000a74 <APP_WriteCommand+0xa4>)
  8000a24:	681b      	ldr	r3, [r3, #0]
  8000a26:	6013      	str	r3, [r2, #0]
-        s_cli_block,
-        s_text_magic,
-        sizeof(s_text_magic));
-
+    /*
+     * Store the text length as a 16-bit little-endian value.
+     * Splitting it into two bytes allows the read function
+     * to recover the original message length.
+     */
     s_cli_block[4] = (uint8_t)(text_length & 0xFFU);
  8000a28:	697b      	ldr	r3, [r7, #20]
  8000a2a:	b2da      	uxtb	r2, r3
@@ -1235,15 +1294,18 @@ static void APP_WriteCommand(
  8000a36:	4b0e      	ldr	r3, [pc, #56]	@ (8000a70 <APP_WriteCommand+0xa0>)
  8000a38:	715a      	strb	r2, [r3, #5]
 
+
+    /* Copy the actual message immediately after the header. */
     memcpy(
  8000a3a:	697a      	ldr	r2, [r7, #20]
  8000a3c:	6879      	ldr	r1, [r7, #4]
  8000a3e:	480e      	ldr	r0, [pc, #56]	@ (8000a78 <APP_WriteCommand+0xa8>)
  8000a40:	f003 fea4 	bl	800478c <memcpy>
-        &s_cli_block[APP_RECORD_HEADER],
-        text,
-        text_length);
-
+     * Pass the complete logical block to the RAID layer.
+     *
+     * RAID5_WriteBlock() preserves the other two data blocks
+     * in the stripe and recalculates parity.
+     */
     result = RAID5_WriteBlock(
  8000a44:	490a      	ldr	r1, [pc, #40]	@ (8000a70 <APP_WriteCommand+0xa0>)
  8000a46:	68b8      	ldr	r0, [r7, #8]
@@ -1273,7 +1335,8 @@ static void APP_WriteCommand(
  8000a7c:	08005238 	.word	0x08005238
 
 08000a80 <APP_VerifyCommand>:
-
+ * stored data and compares it with the stored parity block.
+ */
 static void APP_VerifyCommand(
     UART_HandleTypeDef *uart,
     uint32_t logical_block)
@@ -1334,7 +1397,10 @@ static void APP_VerifyCommand(
  8000adc:	0800525c 	.word	0x0800525c
 
 08000ae0 <APP_PrintHelp>:
-
+ *
+ * The final logical block number is calculated from the
+ * RAID configuration instead of being hardcoded.
+ */
 static void APP_PrintHelp(UART_HandleTypeDef *uart)
 {
  8000ae0:	b580      	push	{r7, lr}
@@ -1347,11 +1413,11 @@ static void APP_PrintHelp(UART_HandleTypeDef *uart)
  8000ae8:	490c      	ldr	r1, [pc, #48]	@ (8000b1c <APP_PrintHelp+0x3c>)
  8000aea:	6878      	ldr	r0, [r7, #4]
  8000aec:	f7ff fd76 	bl	80005dc <APP_SendText>
-        "  write <block> <text>   Write text to a logical block\r\n"
-        "  verify <block>         Verify parity for its stripe\r\n"
         "\r\n"
         "Logical block range: 0 to ");
 
+
+    /* Display the highest valid logical block number. */
     (void)snprintf(
  8000af0:	f107 0008 	add.w	r0, r7, #8
  8000af4:	f241 73f3 	movw	r3, #6131	@ 0x17f3
@@ -1368,6 +1434,7 @@ static void APP_PrintHelp(UART_HandleTypeDef *uart)
  8000b04:	4619      	mov	r1, r3
  8000b06:	6878      	ldr	r0, [r7, #4]
  8000b08:	f7ff fd68 	bl	80005dc <APP_SendText>
+
 
     APP_SendText(
  8000b0c:	4905      	ldr	r1, [pc, #20]	@ (8000b24 <APP_PrintHelp+0x44>)
@@ -1387,7 +1454,8 @@ static void APP_PrintHelp(UART_HandleTypeDef *uart)
  8000b24:	0800539c 	.word	0x0800539c
 
 08000b28 <APP_ProcessCommand>:
-
+ * before calling the corresponding application function.
+ */
 static void APP_ProcessCommand(
     UART_HandleTypeDef *uart,
     char *line)
@@ -1401,6 +1469,10 @@ static void APP_ProcessCommand(
  8000b32:	683b      	ldr	r3, [r7, #0]
  8000b34:	62fb      	str	r3, [r7, #44]	@ 0x2c
 
+    /*
+     * Skip spaces at the beginning of the command.
+     * This allows commands such as "  status".
+     */
     while (*command == ' ')
  8000b36:	e002      	b.n	8000b3e <APP_ProcessCommand+0x16>
     {
@@ -1413,8 +1485,10 @@ static void APP_ProcessCommand(
  8000b40:	781b      	ldrb	r3, [r3, #0]
  8000b42:	2b20      	cmp	r3, #32
  8000b44:	d0f8      	beq.n	8000b38 <APP_ProcessCommand+0x10>
-    }
-
+     * The block is enclosed in its own scope so that the
+     * temporary length variable does not remain in use
+     * outside this trimming operation.
+     */
     {
         size_t length = strlen(command);
  8000b46:	6af8      	ldr	r0, [r7, #44]	@ 0x2c
@@ -1452,15 +1526,18 @@ static void APP_ProcessCommand(
         }
     }
 
+
+    /* Ignore an empty command. */
     if (command[0] == '\0')
  8000b76:	6afb      	ldr	r3, [r7, #44]	@ 0x2c
  8000b78:	781b      	ldrb	r3, [r3, #0]
  8000b7a:	2b00      	cmp	r3, #0
  8000b7c:	f000 809d 	beq.w	8000cba <APP_ProcessCommand+0x192>
-    {
         return;
     }
 
+
+    /* Execute the help command. */
     if (strcmp(command, "help") == 0)
  8000b80:	4950      	ldr	r1, [pc, #320]	@ (8000cc4 <APP_ProcessCommand+0x19c>)
  8000b82:	6af8      	ldr	r0, [r7, #44]	@ 0x2c
@@ -1476,6 +1553,8 @@ static void APP_ProcessCommand(
  8000b94:	e092      	b.n	8000cbc <APP_ProcessCommand+0x194>
     }
 
+
+    /* Refresh and display the physical flash member status. */
     if (strcmp(command, "status") == 0)
  8000b96:	494c      	ldr	r1, [pc, #304]	@ (8000cc8 <APP_ProcessCommand+0x1a0>)
  8000b98:	6af8      	ldr	r0, [r7, #44]	@ 0x2c
@@ -1489,8 +1568,11 @@ static void APP_ProcessCommand(
  8000ba6:	f7ff fe13 	bl	80007d0 <APP_PrintStatus>
         return;
  8000baa:	e087      	b.n	8000cbc <APP_ProcessCommand+0x194>
-    }
-
+     * read 5
+     *
+     * command + 5 skips the characters "read ".
+     * APP_ParseBlockNumber() extracts the logical block number.
+     */
     if (strncmp(command, "read ", 5U) == 0)
  8000bac:	2205      	movs	r2, #5
  8000bae:	4947      	ldr	r1, [pc, #284]	@ (8000ccc <APP_ProcessCommand+0x1a4>)
@@ -1530,6 +1612,7 @@ static void APP_ProcessCommand(
  8000be0:	f7ff fcfc 	bl	80005dc <APP_SendText>
                 uart,
                 "Usage: read <logical_block>\r\n");
+
             return;
  8000be4:	e06a      	b.n	8000cbc <APP_ProcessCommand+0x194>
         }
@@ -1541,8 +1624,11 @@ static void APP_ProcessCommand(
  8000bec:	f7ff fe7e 	bl	80008ec <APP_ReadCommand>
         return;
  8000bf0:	e064      	b.n	8000cbc <APP_ProcessCommand+0x194>
-    }
-
+     * write 5 Hello STM32
+     *
+     * First, extract the block number.
+     * Then locate the text that follows it.
+     */
     if (strncmp(command, "write ", 6U) == 0)
  8000bf2:	2206      	movs	r2, #6
  8000bf4:	4937      	ldr	r1, [pc, #220]	@ (8000cd4 <APP_ProcessCommand+0x1ac>)
@@ -1576,10 +1662,13 @@ static void APP_ProcessCommand(
  8000c1e:	f7ff fcdd 	bl	80005dc <APP_SendText>
                 uart,
                 "Usage: write <logical_block> <text>\r\n");
+
             return;
  8000c22:	e04b      	b.n	8000cbc <APP_ProcessCommand+0x194>
         }
 
+
+        /* A space must separate the block number and message. */
         if (*end_position != ' ')
  8000c24:	697b      	ldr	r3, [r7, #20]
  8000c26:	781b      	ldrb	r3, [r3, #0]
@@ -1592,14 +1681,18 @@ static void APP_ProcessCommand(
  8000c30:	f7ff fcd4 	bl	80005dc <APP_SendText>
                 uart,
                 "Usage: write <logical_block> <text>\r\n");
+
             return;
  8000c34:	e042      	b.n	8000cbc <APP_ProcessCommand+0x194>
         }
 
+
+        /* Locate the beginning of the text. */
         text = end_position;
  8000c36:	697b      	ldr	r3, [r7, #20]
  8000c38:	627b      	str	r3, [r7, #36]	@ 0x24
 
+        /* Skip spaces between the block number and text. */
         while (*text == ' ')
  8000c3a:	e002      	b.n	8000c42 <APP_ProcessCommand+0x11a>
         {
@@ -1614,6 +1707,7 @@ static void APP_ProcessCommand(
  8000c48:	d0f8      	beq.n	8000c3c <APP_ProcessCommand+0x114>
         }
 
+
         if (*text == '\0')
  8000c4a:	6a7b      	ldr	r3, [r7, #36]	@ 0x24
  8000c4c:	781b      	ldrb	r3, [r3, #0]
@@ -1626,6 +1720,7 @@ static void APP_ProcessCommand(
  8000c56:	f7ff fcc1 	bl	80005dc <APP_SendText>
                 uart,
                 "Enter text after the block number.\r\n");
+
             return;
  8000c5a:	e02f      	b.n	8000cbc <APP_ProcessCommand+0x194>
         }
@@ -1638,8 +1733,11 @@ static void APP_ProcessCommand(
  8000c64:	f7ff feb4 	bl	80009d0 <APP_WriteCommand>
         return;
  8000c68:	e028      	b.n	8000cbc <APP_ProcessCommand+0x194>
-    }
-
+     * verify 5
+     *
+     * The logical block is converted into its stripe index
+     * by APP_VerifyCommand().
+     */
     if (strncmp(command, "verify ", 7U) == 0)
  8000c6a:	2207      	movs	r2, #7
  8000c6c:	491c      	ldr	r1, [pc, #112]	@ (8000ce0 <APP_ProcessCommand+0x1b8>)
@@ -1679,6 +1777,7 @@ static void APP_ProcessCommand(
  8000c9e:	f7ff fc9d 	bl	80005dc <APP_SendText>
                 uart,
                 "Usage: verify <logical_block>\r\n");
+
             return;
  8000ca2:	e00b      	b.n	8000cbc <APP_ProcessCommand+0x194>
         }
@@ -1692,6 +1791,8 @@ static void APP_ProcessCommand(
  8000cae:	e005      	b.n	8000cbc <APP_ProcessCommand+0x194>
     }
 
+
+    /* Display an error if no supported command matches. */
     APP_SendText(uart, "Unknown command. Type help.\r\n");
  8000cb0:	490d      	ldr	r1, [pc, #52]	@ (8000ce8 <APP_ProcessCommand+0x1c0>)
  8000cb2:	6878      	ldr	r0, [r7, #4]
@@ -1716,7 +1817,8 @@ static void APP_ProcessCommand(
  8000ce8:	080054d8 	.word	0x080054d8
 
 08000cec <APP_Console_Run>:
-
+ * does not return to main().
+ */
 void APP_Console_Run(
     UART_HandleTypeDef *uart,
     W25Q64_HandleTypeDef flashes[RAID5_DEVICE_COUNT])
@@ -1741,14 +1843,16 @@ void APP_Console_Run(
         return;
     }
 
+
     APP_SendText(
  8000d06:	494b      	ldr	r1, [pc, #300]	@ (8000e34 <APP_Console_Run+0x148>)
  8000d08:	6878      	ldr	r0, [r7, #4]
  8000d0a:	f7ff fc67 	bl	80005dc <APP_SendText>
-        uart,
-        "\r\nSTM32F401RE RAID-5 Storage Console\r\n"
-        "Checking W25Q64FV members...\r\n");
-
+     *
+     * This loop displays the identification result.
+     * RAID5_Init() performs its own member detection and
+     * stores the availability state used by the RAID layer.
+     */
     for (device = 0U;
  8000d0e:	2300      	movs	r3, #0
  8000d10:	f887 30af 	strb.w	r3, [r7, #175]	@ 0xaf
@@ -1865,8 +1969,11 @@ void APP_Console_Run(
  8000dba:	f897 30af 	ldrb.w	r3, [r7, #175]	@ 0xaf
  8000dbe:	2b03      	cmp	r3, #3
  8000dc0:	d9a9      	bls.n	8000d16 <APP_Console_Run+0x2a>
-    }
-
+     * the internal mapping used for logical block operations.
+     *
+     * It accepts normal operation with four available members
+     * or degraded read operation with one unavailable member.
+     */
     result = RAID5_Init(flashes);
  8000dc2:	6838      	ldr	r0, [r7, #0]
  8000dc4:	f000 fad0 	bl	8001368 <RAID5_Init>
@@ -1879,7 +1986,11 @@ void APP_Console_Run(
  8000dd4:	491a      	ldr	r1, [pc, #104]	@ (8000e40 <APP_Console_Run+0x154>)
  8000dd6:	6878      	ldr	r0, [r7, #4]
  8000dd8:	f7ff fc1a 	bl	8000610 <APP_PrintResult>
-
+    /*
+     * Stop the console if fewer than three valid members
+     * are available. RAID-5 cannot reconstruct data with
+     * two or more missing members.
+     */
     if (result != RAID5_OK)
  8000ddc:	f897 30ae 	ldrb.w	r3, [r7, #174]	@ 0xae
  8000de0:	2b00      	cmp	r3, #0
@@ -1891,10 +2002,14 @@ void APP_Console_Run(
  8000de8:	f7ff fbf8 	bl	80005dc <APP_SendText>
             uart,
             "Cannot start storage: fewer than three valid members.\r\n");
+
         return;
  8000dec:	e01f      	b.n	8000e2e <APP_Console_Run+0x142>
-    }
 
+    /*
+     * Starting the console does not format the flash memory.
+     * Existing stored data remains untouched.
+     */
     APP_SendText(
  8000dee:	4916      	ldr	r1, [pc, #88]	@ (8000e48 <APP_Console_Run+0x15c>)
  8000df0:	6878      	ldr	r0, [r7, #4]
@@ -1902,13 +2017,17 @@ void APP_Console_Run(
         uart,
         "Startup does not erase or rewrite stored data.\r\n");
 
+
+    /* Display the initial member status and command list. */
     APP_PrintStatus(uart);
  8000df6:	6878      	ldr	r0, [r7, #4]
  8000df8:	f7ff fcea 	bl	80007d0 <APP_PrintStatus>
     APP_PrintHelp(uart);
  8000dfc:	6878      	ldr	r0, [r7, #4]
  8000dfe:	f7ff fe6f 	bl	8000ae0 <APP_PrintHelp>
-
+     *
+     * This repeats for as long as the storage console runs.
+     */
     while (1)
     {
         APP_SendText(uart, "\r\nRAID> ");
@@ -1977,10 +2096,11 @@ int main(void)
  8000e62:	f000 f8a3 	bl	8000fac <MX_SPI1_Init>
     MX_USART2_UART_Init();
  8000e66:	f000 f8d7 	bl	8001018 <MX_USART2_UART_Init>
-
-    /* USER CODE BEGIN 2 */
-
-    /* Configuration for the four W25Q64FV flash chips */
+     *   flashes[0] -> Flash 1
+     *   flashes[1] -> Flash 2
+     *   flashes[2] -> Flash 3
+     *   flashes[3] -> Flash 4
+     */
     W25Q64_HandleTypeDef flashes[RAID5_DEVICE_COUNT] =
  8000e6a:	4b15      	ldr	r3, [pc, #84]	@ (8000ec0 <main+0x70>)
  8000e6c:	463c      	mov	r4, r7
@@ -1991,11 +2111,11 @@ int main(void)
  8000e76:	c40f      	stmia	r4!, {r0, r1, r2, r3}
  8000e78:	e895 000f 	ldmia.w	r5, {r0, r1, r2, r3}
  8000e7c:	e884 000f 	stmia.w	r4, {r0, r1, r2, r3}
-        {&hspi1, GPIOA, GPIO_PIN_9},  /* Flash 3: PA9 */
-        {&hspi1, GPIOA, GPIO_PIN_8}   /* Flash 4: PA8 */
-    };
-
-    /* Ensure all flash chips are deselected */
+     * HIGH -> Flash deselected
+     *
+     * Keep all four chips deselected before starting
+     * communication over the shared SPI bus.
+     */
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
  8000e80:	2201      	movs	r2, #1
  8000e82:	2140      	movs	r1, #64	@ 0x40
@@ -2016,10 +2136,10 @@ int main(void)
  8000ea2:	f44f 7180 	mov.w	r1, #256	@ 0x100
  8000ea6:	4809      	ldr	r0, [pc, #36]	@ (8000ecc <main+0x7c>)
  8000ea8:	f001 fdc6 	bl	8002a38 <HAL_GPIO_WritePin>
-     * Start the interactive RAID-5 storage console.
+     * and waits for storage commands such as read, write,
+     * status and verify.
      *
-     * Commands are entered through USART2 at 115200 baud.
-     * The console does not automatically erase stored data.
+     * Normal startup does not erase stored data.
      */
     APP_Console_Run(&huart2, flashes);
  8000eac:	463b      	mov	r3, r7
@@ -2098,7 +2218,7 @@ void SystemClock_Config(void)
         PWR_REGULATOR_VOLTAGE_SCALE2
     );
 
-    /* Initialize the RCC oscillators */
+    /* Initialize the RCC Oscillators */
     RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
  8000f34:	2302      	movs	r3, #2
  8000f36:	623b      	str	r3, [r7, #32]
@@ -2511,10 +2631,10 @@ __STATIC_FORCEINLINE void __disable_irq(void)
  800116e:	e7fd      	b.n	800116c <Error_Handler+0x8>
 
 08001170 <RAID5_FromHAL>:
-static uint8_t s_recovery_buffer[RAID5_BLOCK_SIZE];
-static uint8_t s_verify_buffer[RAID5_BLOCK_SIZE];
-static uint8_t s_write_blocks[RAID5_DATA_BLOCKS][RAID5_BLOCK_SIZE];
-
+ * the RAID layer uses its own RAID5_Status enumeration.
+ *
+ * This function keeps that conversion in one place.
+ */
 static RAID5_Status RAID5_FromHAL(HAL_StatusTypeDef result)
 {
  8001170:	b480      	push	{r7}
@@ -2542,6 +2662,7 @@ static RAID5_Status RAID5_FromHAL(HAL_StatusTypeDef result)
  800118c:	e000      	b.n	8001190 <RAID5_FromHAL+0x20>
     }
 
+    /* Any other HAL failure is reported as a flash error. */
     return RAID5_FLASH_ERROR;
  800118e:	2305      	movs	r3, #5
 }
@@ -2552,7 +2673,10 @@ static RAID5_Status RAID5_FromHAL(HAL_StatusTypeDef result)
  800119a:	4770      	bx	lr
 
 0800119c <RAID5_CountAvailable>:
-
+ *
+ * The result is used to determine whether normal RAID operation
+ * or single-member degraded operation is possible.
+ */
 static uint8_t RAID5_CountAvailable(void)
 {
  800119c:	b480      	push	{r7}
@@ -2601,14 +2725,16 @@ static uint8_t RAID5_CountAvailable(void)
  80011d8:	2000114c 	.word	0x2000114c
 
 080011dc <RAID5_ParityDevice>:
-
+ * Stripe 3 -> Flash 1
+ *
+ * The function returns a zero-based array index, not a flash number.
+ */
 static uint8_t RAID5_ParityDevice(uint32_t stripe_index)
 {
  80011dc:	b480      	push	{r7}
  80011de:	b083      	sub	sp, #12
  80011e0:	af00      	add	r7, sp, #0
  80011e2:	6078      	str	r0, [r7, #4]
-    /* Stripe 0 -> Flash 4; stripe 1 -> Flash 3; stripe 2 -> Flash 2. */
     return (uint8_t)(3U - (stripe_index % RAID5_DEVICE_COUNT));
  80011e4:	687b      	ldr	r3, [r7, #4]
  80011e6:	b2db      	uxtb	r3, r3
@@ -2624,7 +2750,8 @@ static uint8_t RAID5_ParityDevice(uint32_t stripe_index)
  80011fc:	4770      	bx	lr
 
 080011fe <RAID5_DataDevice>:
-
+ * 0xFF if the requested data index is invalid.
+ */
 static uint8_t RAID5_DataDevice(
     uint32_t stripe_index,
     uint8_t data_index)
@@ -2650,15 +2777,17 @@ static uint8_t RAID5_DataDevice(
  800121a:	73bb      	strb	r3, [r7, #14]
  800121c:	e011      	b.n	8001242 <RAID5_DataDevice+0x44>
     {
+        /* The parity device does not store a data block. */
         if (device == parity_device)
  800121e:	7bba      	ldrb	r2, [r7, #14]
  8001220:	7b7b      	ldrb	r3, [r7, #13]
  8001222:	429a      	cmp	r2, r3
  8001224:	d009      	beq.n	800123a <RAID5_DataDevice+0x3c>
-        {
-            continue;
-        }
 
+        /*
+         * Count only the devices that store data.
+         * Return the device when the requested data position is reached.
+         */
         if (data_count == data_index)
  8001226:	7bfa      	ldrb	r2, [r7, #15]
  8001228:	78fb      	ldrb	r3, [r7, #3]
@@ -2695,7 +2824,10 @@ static uint8_t RAID5_DataDevice(
  8001250:	bd80      	pop	{r7, pc}
 
 08001252 <RAID5_PhysicalAddress>:
-
+ *
+ * Physical address = RAID5_START_ADDRESS
+ *                  + (stripe_index * RAID5_BLOCK_SIZE)
+ */
 static uint32_t RAID5_PhysicalAddress(uint32_t stripe_index)
 {
  8001252:	b480      	push	{r7}
@@ -2715,7 +2847,10 @@ static uint32_t RAID5_PhysicalAddress(uint32_t stripe_index)
  800126a:	4770      	bx	lr
 
 0800126c <RAID5_IsMemberAvailable>:
-
+ * 3 = Flash 4
+ *
+ * Returns 1 if available, otherwise 0.
+ */
 uint8_t RAID5_IsMemberAvailable(uint8_t member_index)
 {
  800126c:	b480      	push	{r7}
@@ -2753,7 +2888,10 @@ uint8_t RAID5_IsMemberAvailable(uint8_t member_index)
  80012a0:	2000114c 	.word	0x2000114c
 
 080012a4 <RAID5_IsDegraded>:
-
+ * Returns:
+ * 1 = Degraded or not initialized.
+ * 0 = All four members available.
+ */
 uint8_t RAID5_IsDegraded(void)
 {
  80012a4:	b580      	push	{r7, lr}
@@ -2783,9 +2921,9 @@ uint8_t RAID5_IsDegraded(void)
  80012c8:	20001150 	.word	0x20001150
 
 080012cc <RAID5_RefreshMembers>:
-/*
- * Probe every chip by reading its JEDEC ID.
- * HAL_OK by itself is not sufficient: the ID must match EF 40 17.
+ * RAID5_OK                -> Three or four valid members detected.
+ * RAID5_MEMBER_UNAVAILABLE -> Fewer than three valid members.
+ * RAID5_ERROR             -> RAID layer has not been initialized.
  */
 RAID5_Status RAID5_RefreshMembers(void)
 {
@@ -2805,6 +2943,7 @@ RAID5_Status RAID5_RefreshMembers(void)
  80012dc:	e039      	b.n	8001352 <RAID5_RefreshMembers+0x86>
     }
 
+    /* Probe each physical flash independently. */
     for (device = 0U; device < RAID5_DEVICE_COUNT; device++)
  80012de:	2300      	movs	r3, #0
  80012e0:	71fb      	strb	r3, [r7, #7]
@@ -2875,9 +3014,11 @@ RAID5_Status RAID5_RefreshMembers(void)
  800133c:	79fb      	ldrb	r3, [r7, #7]
  800133e:	2b03      	cmp	r3, #3
  8001340:	d9d0      	bls.n	80012e4 <RAID5_RefreshMembers+0x18>
-        }
-    }
 
+    /*
+     * RAID-5 can tolerate one unavailable member.
+     * If fewer than three members respond, normal recovery is impossible.
+     */
     if (RAID5_CountAvailable() < 3U)
  8001342:	f7ff ff2b 	bl	800119c <RAID5_CountAvailable>
  8001346:	4603      	mov	r3, r0
@@ -2902,7 +3043,9 @@ RAID5_Status RAID5_RefreshMembers(void)
  8001364:	2000114c 	.word	0x2000114c
 
 08001368 <RAID5_Init>:
-
+ *
+ * No sectors are erased or programmed during initialization.
+ */
 RAID5_Status RAID5_Init(
     W25Q64_HandleTypeDef flashes[RAID5_DEVICE_COUNT])
 {
@@ -2928,6 +3071,7 @@ RAID5_Status RAID5_Init(
  800137c:	2200      	movs	r2, #0
  800137e:	701a      	strb	r2, [r3, #0]
 
+    /* Copy each flash configuration into the RAID layer. */
     for (device = 0U; device < RAID5_DEVICE_COUNT; device++)
  8001380:	2300      	movs	r3, #0
  8001382:	73fb      	strb	r3, [r7, #15]
@@ -2966,8 +3110,8 @@ RAID5_Status RAID5_Init(
  80013be:	d9e2      	bls.n	8001386 <RAID5_Init+0x1e>
 
     /*
-     * Enable probing, then refresh member detection.
-     * Initialization accepts four members or one missing member.
+     * Enable the member-detection function.
+     * It checks s_initialized before performing the probe.
      */
     s_initialized = 1U;
  80013c0:	4b09      	ldr	r3, [pc, #36]	@ (80013e8 <RAID5_Init+0x80>)
@@ -3061,7 +3205,7 @@ RAID5_Status RAID5_WriteStripe(
  8001430:	e0ca      	b.n	80015c8 <RAID5_WriteStripe+0x1d4>
     }
 
-    /* Refresh detection before any destructive operation. */
+    /* Refresh detection before performing any destructive operation. */
     raid_result = RAID5_RefreshMembers();
  8001432:	f7ff ff4b 	bl	80012cc <RAID5_RefreshMembers>
  8001436:	4603      	mov	r3, r0
@@ -3077,7 +3221,7 @@ RAID5_Status RAID5_WriteStripe(
  8001448:	e0be      	b.n	80015c8 <RAID5_WriteStripe+0x1d4>
     }
 
-    /* All four members are required for stripe writes. */
+    /* A complete stripe write requires all four physical members. */
     if (RAID5_CountAvailable() != RAID5_DEVICE_COUNT)
  800144a:	f7ff fea7 	bl	800119c <RAID5_CountAvailable>
  800144e:	4603      	mov	r3, r0
@@ -3089,6 +3233,7 @@ RAID5_Status RAID5_WriteStripe(
  8001456:	e0b7      	b.n	80015c8 <RAID5_WriteStripe+0x1d4>
     }
 
+    /* Store the addresses of the three input buffers. */
     data_blocks[0] = data0;
  8001458:	68bb      	ldr	r3, [r7, #8]
  800145a:	613b      	str	r3, [r7, #16]
@@ -3098,8 +3243,11 @@ RAID5_Status RAID5_WriteStripe(
     data_blocks[2] = data2;
  8001460:	683b      	ldr	r3, [r7, #0]
  8001462:	61bb      	str	r3, [r7, #24]
-
-    /* Calculate P = D0 XOR D1 XOR D2. */
+     * P = D0 XOR D1 XOR D2
+     *
+     * Each byte of the parity block is calculated from
+     * the corresponding byte of all three data blocks.
+     */
     for (i = 0U; i < RAID5_BLOCK_SIZE; i++)
  8001464:	2300      	movs	r3, #0
  8001466:	62bb      	str	r3, [r7, #40]	@ 0x28
@@ -3138,6 +3286,8 @@ RAID5_Status RAID5_WriteStripe(
  80014a0:	d3e3      	bcc.n	800146a <RAID5_WriteStripe+0x76>
     }
 
+
+    /* Find the common physical address and parity device for this stripe. */
     address = RAID5_PhysicalAddress(stripe_index);
  80014a2:	68f8      	ldr	r0, [r7, #12]
  80014a4:	f7ff fed5 	bl	8001252 <RAID5_PhysicalAddress>
@@ -3147,8 +3297,11 @@ RAID5_Status RAID5_WriteStripe(
  80014ac:	f7ff fe96 	bl	80011dc <RAID5_ParityDevice>
  80014b0:	4603      	mov	r3, r0
  80014b2:	77fb      	strb	r3, [r7, #31]
-
-    /* Erase the stripe's sector on all four chips. */
+     * Erase the stripe's 4 KB sector on every flash.
+     *
+     * All chips use the same physical address for this stripe.
+     * Erasing is required before programming new data into NOR flash.
+     */
     for (device = 0U; device < RAID5_DEVICE_COUNT; device++)
  80014b4:	2300      	movs	r3, #0
  80014b6:	f887 302f 	strb.w	r3, [r7, #47]	@ 0x2f
@@ -3183,6 +3336,7 @@ RAID5_Status RAID5_WriteStripe(
  80014ea:	2b00      	cmp	r3, #0
  80014ec:	d007      	beq.n	80014fe <RAID5_WriteStripe+0x10a>
         {
+            /* Mark the member unavailable if the erase fails. */
             s_member_available[device] = 0U;
  80014ee:	f897 302f 	ldrb.w	r3, [r7, #47]	@ 0x2f
  80014f2:	4a3a      	ldr	r2, [pc, #232]	@ (80015dc <RAID5_WriteStripe+0x1e8>)
@@ -3198,10 +3352,11 @@ RAID5_Status RAID5_WriteStripe(
  8001508:	f897 302f 	ldrb.w	r3, [r7, #47]	@ 0x2f
  800150c:	2b03      	cmp	r3, #3
  800150e:	d9d5      	bls.n	80014bc <RAID5_WriteStripe+0xc8>
-        }
-    }
-
-    /* Write the three data blocks. */
+     * Program the three data blocks.
+     *
+     * RAID5_DataDevice() determines which physical chip stores
+     * each data block for the selected stripe.
+     */
     for (device = 0U; device < RAID5_DATA_BLOCKS; device++)
  8001510:	2300      	movs	r3, #0
  8001512:	f887 302f 	strb.w	r3, [r7, #47]	@ 0x2f
@@ -3267,10 +3422,10 @@ RAID5_Status RAID5_WriteStripe(
  8001580:	f897 302f 	ldrb.w	r3, [r7, #47]	@ 0x2f
  8001584:	2b02      	cmp	r3, #2
  8001586:	d9c7      	bls.n	8001518 <RAID5_WriteStripe+0x124>
-        }
     }
 
-    /* Write parity to the rotating parity member. */
+
+    /* Store the calculated parity block on its rotating parity member. */
     flash_result = W25Q64_Program(
         &s_flash[parity_device],
  8001588:	7ffa      	ldrb	r2, [r7, #31]
@@ -3323,7 +3478,8 @@ RAID5_Status RAID5_WriteStripe(
  80015dc:	2000114c 	.word	0x2000114c
 
 080015e0 <RAID5_ReadBlock>:
-
+ * The reconstructed data is not automatically written back to flash.
+ */
 RAID5_Status RAID5_ReadBlock(
     uint32_t logical_block,
     uint8_t *buffer)
@@ -3368,9 +3524,11 @@ RAID5_Status RAID5_ReadBlock(
         return RAID5_OUT_OF_RANGE;
  800160a:	2303      	movs	r3, #3
  800160c:	e0c0      	b.n	8001790 <RAID5_ReadBlock+0x1b0>
-    }
 
-    /* Refresh physical availability before deciding the read path. */
+    /*
+     * Check physical member availability before deciding
+     * whether to perform a normal read or reconstruction.
+     */
     raid_result = RAID5_RefreshMembers();
  800160e:	f7ff fe5d 	bl	80012cc <RAID5_RefreshMembers>
  8001612:	4603      	mov	r3, r0
@@ -3384,8 +3542,11 @@ RAID5_Status RAID5_ReadBlock(
         return raid_result;
  800161c:	7ffb      	ldrb	r3, [r7, #31]
  800161e:	e0b7      	b.n	8001790 <RAID5_ReadBlock+0x1b0>
-    }
-
+     * Example:
+     * Logical block 5:
+     * Stripe index = 5 / 3 = 1
+     * Data index   = 5 % 3 = 2
+     */
     stripe_index = logical_block / RAID5_DATA_BLOCKS;
  8001620:	687b      	ldr	r3, [r7, #4]
  8001622:	4a5e      	ldr	r2, [pc, #376]	@ (800179c <RAID5_ReadBlock+0x1bc>)
@@ -3404,6 +3565,8 @@ RAID5_Status RAID5_ReadBlock(
  800163e:	4613      	mov	r3, r2
  8001640:	75fb      	strb	r3, [r7, #23]
 
+
+    /* Determine which physical devices hold this block and its parity. */
     target_device = RAID5_DataDevice(stripe_index, data_index);
  8001642:	7dfb      	ldrb	r3, [r7, #23]
  8001644:	4619      	mov	r1, r3
@@ -3416,12 +3579,17 @@ RAID5_Status RAID5_ReadBlock(
  8001652:	f7ff fdc3 	bl	80011dc <RAID5_ParityDevice>
  8001656:	4603      	mov	r3, r0
  8001658:	757b      	strb	r3, [r7, #21]
+
+    /* All members use the same address for this stripe. */
     address = RAID5_PhysicalAddress(stripe_index);
  800165a:	69b8      	ldr	r0, [r7, #24]
  800165c:	f7ff fdf9 	bl	8001252 <RAID5_PhysicalAddress>
  8001660:	6138      	str	r0, [r7, #16]
-
-    /* Normal read if the required data member is online. */
+     * NORMAL READ
+     *
+     * If the physical device containing the requested data is online,
+     * read the data directly into the caller's buffer.
+     */
     if (s_member_available[target_device] != 0U)
  8001662:	7dbb      	ldrb	r3, [r7, #22]
  8001664:	4a4e      	ldr	r2, [pc, #312]	@ (80017a0 <RAID5_ReadBlock+0x1c0>)
@@ -3465,8 +3633,11 @@ RAID5_Status RAID5_ReadBlock(
  8001696:	4a42      	ldr	r2, [pc, #264]	@ (80017a0 <RAID5_ReadBlock+0x1c0>)
  8001698:	2100      	movs	r1, #0
  800169a:	54d1      	strb	r1, [r2, r3]
-    }
-
+     * RECOVERY CHECK
+     *
+     * Reconstruction is possible only when at least three
+     * members are still available.
+     */
     if (RAID5_CountAvailable() < (RAID5_DEVICE_COUNT - 1U))
  800169c:	f7ff fd7e 	bl	800119c <RAID5_CountAvailable>
  80016a0:	4603      	mov	r3, r0
@@ -3478,7 +3649,8 @@ RAID5_Status RAID5_ReadBlock(
  80016a8:	e072      	b.n	8001790 <RAID5_ReadBlock+0x1b0>
     }
 
-    /* Reconstruction requires the parity member. */
+
+    /* The parity block must be available for reconstruction. */
     if (s_member_available[parity_device] == 0U)
  80016aa:	7d7b      	ldrb	r3, [r7, #21]
  80016ac:	4a3c      	ldr	r2, [pc, #240]	@ (80017a0 <RAID5_ReadBlock+0x1c0>)
@@ -3489,8 +3661,10 @@ RAID5_Status RAID5_ReadBlock(
         return RAID5_MEMBER_UNAVAILABLE;
  80016b4:	2304      	movs	r3, #4
  80016b6:	e06b      	b.n	8001790 <RAID5_ReadBlock+0x1b0>
-    }
-
+     *
+     * The output buffer will gradually become the reconstructed
+     * data block as we XOR the surviving data blocks into it.
+     */
     flash_result = W25Q64_Read(
         &s_flash[parity_device],
  80016b8:	7d7a      	ldrb	r2, [r7, #21]
@@ -3524,20 +3698,20 @@ RAID5_Status RAID5_ReadBlock(
         return RAID5_MEMBER_UNAVAILABLE;
  80016e4:	2304      	movs	r3, #4
  80016e6:	e053      	b.n	8001790 <RAID5_ReadBlock+0x1b0>
-    }
-
-    /*
-     * Missing data = parity XOR the other two data blocks.
+     *
+     * buffer = P XOR D1 XOR D2
+     *
+     * The result is the missing data block.
      */
     for (other_index = 0U;
  80016e8:	2300      	movs	r3, #0
  80016ea:	f887 3027 	strb.w	r3, [r7, #39]	@ 0x27
  80016ee:	e04a      	b.n	8001786 <RAID5_ReadBlock+0x1a6>
-         other_index++)
     {
         uint8_t other_device;
         uint32_t i;
 
+        /* Do not read the data position we are reconstructing. */
         if (other_index == data_index)
  80016f0:	f897 2027 	ldrb.w	r2, [r7, #39]	@ 0x27
  80016f4:	7dfb      	ldrb	r3, [r7, #23]
@@ -3547,6 +3721,7 @@ RAID5_Status RAID5_ReadBlock(
             continue;
         }
 
+        /* Find the physical device containing this surviving block. */
         other_device = RAID5_DataDevice(stripe_index, other_index);
  80016fa:	f897 3027 	ldrb.w	r3, [r7, #39]	@ 0x27
  80016fe:	4619      	mov	r1, r3
@@ -3567,6 +3742,7 @@ RAID5_Status RAID5_ReadBlock(
  8001716:	e03b      	b.n	8001790 <RAID5_ReadBlock+0x1b0>
         }
 
+        /* Read the surviving data block into a temporary buffer. */
         flash_result = W25Q64_Read(
             &s_flash[other_device],
  8001718:	7bba      	ldrb	r2, [r7, #14]
@@ -3600,8 +3776,11 @@ RAID5_Status RAID5_ReadBlock(
             return RAID5_MEMBER_UNAVAILABLE;
  8001744:	2304      	movs	r3, #4
  8001746:	e023      	b.n	8001790 <RAID5_ReadBlock+0x1b0>
-        }
 
+        /*
+         * XOR the surviving block into the parity data.
+         * Repeat for all 4096 bytes.
+         */
         for (i = 0U; i < RAID5_BLOCK_SIZE; i++)
  8001748:	2300      	movs	r3, #0
  800174a:	623b      	str	r3, [r7, #32]
@@ -3657,7 +3836,8 @@ RAID5_Status RAID5_ReadBlock(
  80017a8:	20002154 	.word	0x20002154
 
 080017ac <RAID5_WriteBlock>:
-
+ * All four flash members must be available for this operation.
+ */
 RAID5_Status RAID5_WriteBlock(
     uint32_t logical_block,
     const uint8_t *data)
@@ -3704,7 +3884,8 @@ RAID5_Status RAID5_WriteBlock(
  80017d8:	e055      	b.n	8001886 <RAID5_WriteBlock+0xda>
     }
 
-    /* Reject writes when any member is missing. */
+
+    /* Refresh member detection before allowing a write. */
     result = RAID5_RefreshMembers();
  80017da:	f7ff fd77 	bl	80012cc <RAID5_RefreshMembers>
  80017de:	4603      	mov	r3, r0
@@ -3720,6 +3901,8 @@ RAID5_Status RAID5_WriteBlock(
  80017ea:	e04c      	b.n	8001886 <RAID5_WriteBlock+0xda>
     }
 
+
+    /* Do not perform read-modify-write with a missing member. */
     if (RAID5_CountAvailable() != RAID5_DEVICE_COUNT)
  80017ec:	f7ff fcd6 	bl	800119c <RAID5_CountAvailable>
  80017f0:	4603      	mov	r3, r0
@@ -3731,6 +3914,8 @@ RAID5_Status RAID5_WriteBlock(
  80017f8:	e045      	b.n	8001886 <RAID5_WriteBlock+0xda>
     }
 
+
+    /* Find the stripe and data position for the requested block. */
     stripe_index = logical_block / RAID5_DATA_BLOCKS;
  80017fa:	687b      	ldr	r3, [r7, #4]
  80017fc:	4a25      	ldr	r2, [pc, #148]	@ (8001894 <RAID5_WriteBlock+0xe8>)
@@ -3748,8 +3933,11 @@ RAID5_Status RAID5_WriteBlock(
  8001816:	1aca      	subs	r2, r1, r3
  8001818:	4613      	mov	r3, r2
  800181a:	73fb      	strb	r3, [r7, #15]
-
-    /* Preserve the two other blocks in the same stripe. */
+     * Preserve the two existing data blocks.
+     *
+     * The target data position is skipped because its old contents
+     * will be replaced with the new data supplied by the application.
+     */
     for (data_index = 0U;
  800181c:	2300      	movs	r3, #0
  800181e:	75fb      	strb	r3, [r7, #23]
@@ -3808,9 +3996,10 @@ RAID5_Status RAID5_WriteBlock(
  800185e:	7dfb      	ldrb	r3, [r7, #23]
  8001860:	2b02      	cmp	r3, #2
  8001862:	d9de      	bls.n	8001822 <RAID5_WriteBlock+0x76>
-        }
     }
 
+
+    /* Replace the requested data block with the new application data. */
     memcpy(
         s_write_blocks[target_index],
  8001864:	7bfb      	ldrb	r3, [r7, #15]
@@ -3822,10 +4011,11 @@ RAID5_Status RAID5_WriteBlock(
  8001870:	6839      	ldr	r1, [r7, #0]
  8001872:	4618      	mov	r0, r3
  8001874:	f002 ff8a 	bl	800478c <memcpy>
-        data,
-        RAID5_BLOCK_SIZE);
 
-    /* Rewrite the complete stripe and regenerate parity. */
+    /*
+     * Write all three data blocks again.
+     * RAID5_WriteStripe() recalculates and stores the updated parity.
+     */
     return RAID5_WriteStripe(
  8001878:	4b08      	ldr	r3, [pc, #32]	@ (800189c <RAID5_WriteBlock+0xf0>)
  800187a:	4a09      	ldr	r2, [pc, #36]	@ (80018a0 <RAID5_WriteBlock+0xf4>)
@@ -3850,7 +4040,10 @@ RAID5_Status RAID5_WriteBlock(
  80018a0:	20005154 	.word	0x20005154
 
 080018a4 <RAID5_VerifyStripe>:
-
+ *
+ * Returns RAID5_PARITY_MISMATCH if the calculated and stored
+ * parity blocks are different.
+ */
 RAID5_Status RAID5_VerifyStripe(uint32_t stripe_index)
 {
  80018a4:	b580      	push	{r7, lr}
@@ -3884,7 +4077,8 @@ RAID5_Status RAID5_VerifyStripe(uint32_t stripe_index)
  80018c4:	e08b      	b.n	80019de <RAID5_VerifyStripe+0x13a>
     }
 
-    /* Refresh before verifying physical data and parity. */
+
+    /* Refresh member availability before accessing the flash devices. */
     raid_result = RAID5_RefreshMembers();
  80018c6:	f7ff fd01 	bl	80012cc <RAID5_RefreshMembers>
  80018ca:	4603      	mov	r3, r0
@@ -3900,6 +4094,8 @@ RAID5_Status RAID5_VerifyStripe(uint32_t stripe_index)
  80018d6:	e082      	b.n	80019de <RAID5_VerifyStripe+0x13a>
     }
 
+
+    /* Parity verification requires all four physical members. */
     if (RAID5_CountAvailable() != RAID5_DEVICE_COUNT)
  80018d8:	f7ff fc60 	bl	800119c <RAID5_CountAvailable>
  80018dc:	4603      	mov	r3, r0
@@ -3911,6 +4107,7 @@ RAID5_Status RAID5_VerifyStripe(uint32_t stripe_index)
  80018e4:	e07b      	b.n	80019de <RAID5_VerifyStripe+0x13a>
     }
 
+
     parity_device = RAID5_ParityDevice(stripe_index);
  80018e6:	6878      	ldr	r0, [r7, #4]
  80018e8:	f7ff fc78 	bl	80011dc <RAID5_ParityDevice>
@@ -3921,13 +4118,18 @@ RAID5_Status RAID5_VerifyStripe(uint32_t stripe_index)
  80018f2:	f7ff fcae 	bl	8001252 <RAID5_PhysicalAddress>
  80018f6:	6138      	str	r0, [r7, #16]
 
+
+    /* Clear the parity buffer before recalculating XOR parity. */
     memset(s_parity_buffer, 0, sizeof(s_parity_buffer));
  80018f8:	f44f 5280 	mov.w	r2, #4096	@ 0x1000
  80018fc:	2100      	movs	r1, #0
  80018fe:	483b      	ldr	r0, [pc, #236]	@ (80019ec <RAID5_VerifyStripe+0x148>)
  8001900:	f002 fefe 	bl	8004700 <memset>
-
-    /* Recalculate parity directly from the three stored data blocks. */
+     * Read each physical data block and XOR it into s_parity_buffer.
+     *
+     * After all three blocks have been processed, this buffer
+     * contains the parity calculated from the stored data.
+     */
     for (data_index = 0U;
  8001904:	2300      	movs	r3, #0
  8001906:	77fb      	strb	r3, [r7, #31]
@@ -3982,6 +4184,7 @@ RAID5_Status RAID5_VerifyStripe(uint32_t stripe_index)
  800194e:	e046      	b.n	80019de <RAID5_VerifyStripe+0x13a>
         }
 
+        /* Combine the current data block with the calculated parity. */
         for (i = 0U; i < RAID5_BLOCK_SIZE; i++)
  8001950:	2300      	movs	r3, #0
  8001952:	61bb      	str	r3, [r7, #24]
@@ -4018,9 +4221,10 @@ RAID5_Status RAID5_VerifyStripe(uint32_t stripe_index)
  8001988:	7ffb      	ldrb	r3, [r7, #31]
  800198a:	2b02      	cmp	r3, #2
  800198c:	d9bd      	bls.n	800190a <RAID5_VerifyStripe+0x66>
-        }
     }
 
+
+    /* Read the parity block that is actually stored on the flash. */
     flash_result = W25Q64_Read(
         &s_flash[parity_device],
  800198e:	7dba      	ldrb	r2, [r7, #22]
@@ -4057,8 +4261,11 @@ RAID5_Status RAID5_VerifyStripe(uint32_t stripe_index)
  80019be:	f7ff fbd7 	bl	8001170 <RAID5_FromHAL>
  80019c2:	4603      	mov	r3, r0
  80019c4:	e00b      	b.n	80019de <RAID5_VerifyStripe+0x13a>
-    }
-
+     * Compare calculated parity with stored parity.
+     *
+     * memcmp() compares the two buffers byte by byte.
+     * A result of zero means the buffers are identical.
+     */
     if (memcmp(
  80019c6:	f44f 5280 	mov.w	r2, #4096	@ 0x1000
  80019ca:	490c      	ldr	r1, [pc, #48]	@ (80019fc <RAID5_VerifyStripe+0x158>)
@@ -4092,7 +4299,10 @@ RAID5_Status RAID5_VerifyStripe(uint32_t stripe_index)
  80019fc:	20002154 	.word	0x20002154
 
 08001a00 <RAID5_StatusString>:
-
+ *
+ * This is used by the UART console to display operation results
+ * without needing to understand the numeric status values.
+ */
 const char *RAID5_StatusString(RAID5_Status status)
 {
  8001a00:	b480      	push	{r7}
@@ -4702,9 +4912,9 @@ void SystemInit(void)
  8001cec:	e000ed00 	.word	0xe000ed00
 
 08001cf0 <W25Q64_IsValidHandle>:
-#define W25Q64_MAX_TRANSFER \
-    (W25Q64_COMMAND_SIZE + W25Q64_PAGE_SIZE)
-
+ *
+ * Returns 1 if the handle looks valid, otherwise 0.
+ */
 static uint8_t W25Q64_IsValidHandle(
     const W25Q64_HandleTypeDef *flash)
 {
@@ -4755,7 +4965,9 @@ static uint8_t W25Q64_IsValidHandle(
  8001d2a:	4770      	bx	lr
 
 08001d2c <W25Q64_Select>:
-
+ * LOW  = Selected
+ * HIGH = Deselected
+ */
 static void W25Q64_Select(
     const W25Q64_HandleTypeDef *flash)
 {
@@ -4783,6 +4995,8 @@ static void W25Q64_Select(
 
 08001d4c <W25Q64_Deselect>:
 
+
+/* Deselect a flash device by setting its CS pin HIGH. */
 static void W25Q64_Deselect(
     const W25Q64_HandleTypeDef *flash)
 {
@@ -4809,7 +5023,8 @@ static void W25Q64_Deselect(
  8001d6a:	bd80      	pop	{r7, pc}
 
 08001d6c <W25Q64_PutAddress>:
-
+ * Address 0x001000 becomes 00 10 00.
+ */
 static void W25Q64_PutAddress(
     uint8_t *command,
     uint32_t address)
@@ -4847,7 +5062,9 @@ static void W25Q64_PutAddress(
  8001da2:	4770      	bx	lr
 
 08001da4 <W25Q64_WriteEnable>:
-
+ *
+ * Returns HAL_OK only when Write Enable is confirmed.
+ */
 static HAL_StatusTypeDef W25Q64_WriteEnable(
     W25Q64_HandleTypeDef *flash)
 {
@@ -4863,6 +5080,8 @@ static HAL_StatusTypeDef W25Q64_WriteEnable(
  8001db2:	737b      	strb	r3, [r7, #13]
     HAL_StatusTypeDef result;
 
+
+    /* Make sure the flash has finished its previous operation. */
     result = W25Q64_WaitReady(
  8001db4:	f44f 717a 	mov.w	r1, #1000	@ 0x3e8
  8001db8:	6878      	ldr	r0, [r7, #4]
@@ -4882,6 +5101,8 @@ static HAL_StatusTypeDef W25Q64_WriteEnable(
  8001dca:	e029      	b.n	8001e20 <W25Q64_WriteEnable+0x7c>
     }
 
+
+    /* Send the Write Enable opcode (0x06). */
     W25Q64_Select(flash);
  8001dcc:	6878      	ldr	r0, [r7, #4]
  8001dce:	f7ff ffad 	bl	8001d2c <W25Q64_Select>
@@ -4912,8 +5133,11 @@ static HAL_StatusTypeDef W25Q64_WriteEnable(
         return result;
  8001df2:	7bfb      	ldrb	r3, [r7, #15]
  8001df4:	e014      	b.n	8001e20 <W25Q64_WriteEnable+0x7c>
-    }
 
+    /*
+     * Read the status register to confirm that the Write
+     * Enable Latch has actually been set.
+     */
     result = W25Q64_ReadStatus(flash, &status_byte);
  8001df6:	f107 030d 	add.w	r3, r7, #13
  8001dfa:	4619      	mov	r1, r3
@@ -4932,6 +5156,8 @@ static HAL_StatusTypeDef W25Q64_WriteEnable(
  8001e0e:	e007      	b.n	8001e20 <W25Q64_WriteEnable+0x7c>
     }
 
+
+    /* Check bit 1 (WEL) using the bitwise AND operator. */
     if ((status_byte & W25Q64_STATUS_WEL_MASK) == 0U)
  8001e10:	7b7b      	ldrb	r3, [r7, #13]
  8001e12:	f003 0302 	and.w	r3, r3, #2
@@ -4952,7 +5178,8 @@ static HAL_StatusTypeDef W25Q64_WriteEnable(
  8001e26:	bd80      	pop	{r7, pc}
 
 08001e28 <W25Q64_ReadID>:
-
+ * to the command transmission.
+ */
 HAL_StatusTypeDef W25Q64_ReadID(
     W25Q64_HandleTypeDef *flash,
     uint8_t id[3])
@@ -4962,6 +5189,11 @@ HAL_StatusTypeDef W25Q64_ReadID(
  8001e2c:	af02      	add	r7, sp, #8
  8001e2e:	6078      	str	r0, [r7, #4]
  8001e30:	6039      	str	r1, [r7, #0]
+    /*
+     * 0x9F requests the JEDEC ID.
+     * The remaining bytes generate the clocks needed to
+     * receive the three identification bytes.
+     */
     uint8_t tx[4] = {
  8001e32:	f06f 0360 	mvn.w	r3, #96	@ 0x60
  8001e36:	613b      	str	r3, [r7, #16]
@@ -4974,6 +5206,8 @@ HAL_StatusTypeDef W25Q64_ReadID(
  8001e3a:	60fb      	str	r3, [r7, #12]
     HAL_StatusTypeDef result;
 
+
+    /* Check the handle and the output array before using them. */
     if ((!W25Q64_IsValidHandle(flash)) || (id == NULL))
  8001e3c:	6878      	ldr	r0, [r7, #4]
  8001e3e:	f7ff ff57 	bl	8001cf0 <W25Q64_IsValidHandle>
@@ -4989,6 +5223,8 @@ HAL_StatusTypeDef W25Q64_ReadID(
  8001e50:	e023      	b.n	8001e9a <W25Q64_ReadID+0x72>
     }
 
+
+    /* Select the flash and transmit/receive the ID command. */
     W25Q64_Select(flash);
  8001e52:	6878      	ldr	r0, [r7, #4]
  8001e54:	f7ff ff6a 	bl	8001d2c <W25Q64_Select>
@@ -5021,8 +5257,11 @@ HAL_StatusTypeDef W25Q64_ReadID(
         return result;
  8001e7e:	7dfb      	ldrb	r3, [r7, #23]
  8001e80:	e00b      	b.n	8001e9a <W25Q64_ReadID+0x72>
-    }
-
+     * Copy the three ID bytes from the received SPI buffer.
+     *
+     * rx[0] is ignored because it was received during
+     * transmission of the 0x9F command.
+     */
     id[0] = rx[1];
  8001e82:	7b7a      	ldrb	r2, [r7, #13]
  8001e84:	683b      	ldr	r3, [r7, #0]
@@ -5047,7 +5286,8 @@ HAL_StatusTypeDef W25Q64_ReadID(
  8001ea0:	bd80      	pop	{r7, pc}
 
 08001ea2 <W25Q64_ReadStatus>:
-
+ * through the status_byte pointer.
+ */
 HAL_StatusTypeDef W25Q64_ReadStatus(
     W25Q64_HandleTypeDef *flash,
     uint8_t *status_byte)
@@ -5057,6 +5297,10 @@ HAL_StatusTypeDef W25Q64_ReadStatus(
  8001ea6:	af02      	add	r7, sp, #8
  8001ea8:	6078      	str	r0, [r7, #4]
  8001eaa:	6039      	str	r1, [r7, #0]
+    /*
+     * 0x05 requests Status Register 1.
+     * 0xFF generates the clocks needed to receive the status byte.
+     */
     uint8_t tx[2] = {
  8001eac:	f64f 7305 	movw	r3, #65285	@ 0xff05
  8001eb0:	81bb      	strh	r3, [r7, #12]
@@ -5068,6 +5312,7 @@ HAL_StatusTypeDef W25Q64_ReadStatus(
  8001eb2:	2300      	movs	r3, #0
  8001eb4:	813b      	strh	r3, [r7, #8]
     HAL_StatusTypeDef result;
+
 
     if ((!W25Q64_IsValidHandle(flash)) ||
  8001eb6:	6878      	ldr	r0, [r7, #4]
@@ -5084,6 +5329,7 @@ HAL_StatusTypeDef W25Q64_ReadStatus(
  8001ec8:	2301      	movs	r3, #1
  8001eca:	e01b      	b.n	8001f04 <W25Q64_ReadStatus+0x62>
     }
+
 
     W25Q64_Select(flash);
  8001ecc:	6878      	ldr	r0, [r7, #4]
@@ -5119,6 +5365,8 @@ HAL_StatusTypeDef W25Q64_ReadStatus(
  8001efa:	e003      	b.n	8001f04 <W25Q64_ReadStatus+0x62>
     }
 
+
+    /* Store the received status byte in the caller's variable. */
     *status_byte = rx[1];
  8001efc:	7a7a      	ldrb	r2, [r7, #9]
  8001efe:	683b      	ldr	r3, [r7, #0]
@@ -5133,7 +5381,8 @@ HAL_StatusTypeDef W25Q64_ReadStatus(
  8001f0a:	bd80      	pop	{r7, pc}
 
 08001f0c <W25Q64_WaitReady>:
-
+ * timeout_ms determines the maximum time to wait.
+ */
 HAL_StatusTypeDef W25Q64_WaitReady(
     W25Q64_HandleTypeDef *flash,
     uint32_t timeout_ms)
@@ -5147,6 +5396,7 @@ HAL_StatusTypeDef W25Q64_WaitReady(
     uint8_t status_byte;
     HAL_StatusTypeDef result;
 
+
     if (!W25Q64_IsValidHandle(flash))
  8001f16:	6878      	ldr	r0, [r7, #4]
  8001f18:	f7ff feea 	bl	8001cf0 <W25Q64_IsValidHandle>
@@ -5159,12 +5409,16 @@ HAL_StatusTypeDef W25Q64_WaitReady(
  8001f24:	e024      	b.n	8001f70 <W25Q64_WaitReady+0x64>
     }
 
+
+    /* Record the time when polling begins. */
     start_time = HAL_GetTick();
  8001f26:	f000 faed 	bl	8002504 <HAL_GetTick>
  8001f2a:	60f8      	str	r0, [r7, #12]
 
+
     while (1)
     {
+        /* Read the current flash status. */
         result = W25Q64_ReadStatus(
  8001f2c:	f107 030a 	add.w	r3, r7, #10
  8001f30:	4619      	mov	r1, r3
@@ -5183,8 +5437,11 @@ HAL_StatusTypeDef W25Q64_WaitReady(
             return result;
  8001f42:	7afb      	ldrb	r3, [r7, #11]
  8001f44:	e014      	b.n	8001f70 <W25Q64_WaitReady+0x64>
-        }
 
+        /*
+         * Check bit 0 (BUSY).
+         * If it is zero, the flash has finished its operation.
+         */
         if ((status_byte & W25Q64_STATUS_BUSY_MASK) == 0U)
  8001f46:	7abb      	ldrb	r3, [r7, #10]
  8001f48:	f003 0301 	and.w	r3, r3, #1
@@ -5194,8 +5451,11 @@ HAL_StatusTypeDef W25Q64_WaitReady(
             return HAL_OK;
  8001f50:	2300      	movs	r3, #0
  8001f52:	e00d      	b.n	8001f70 <W25Q64_WaitReady+0x64>
-        }
 
+        /*
+         * Check how much time has passed.
+         * Stop polling if the requested timeout is exceeded.
+         */
         if ((HAL_GetTick() - start_time) >= timeout_ms)
  8001f54:	f000 fad6 	bl	8002504 <HAL_GetTick>
  8001f58:	4602      	mov	r2, r0
@@ -5210,6 +5470,8 @@ HAL_StatusTypeDef W25Q64_WaitReady(
  8001f66:	e003      	b.n	8001f70 <W25Q64_WaitReady+0x64>
         }
 
+
+        /* Wait briefly before checking the status again. */
         HAL_Delay(1U);
  8001f68:	2001      	movs	r0, #1
  8001f6a:	f000 fad7 	bl	800251c <HAL_Delay>
@@ -5244,6 +5506,7 @@ HAL_StatusTypeDef W25Q64_Read(
  8001f9e:	f507 720c 	add.w	r2, r7, #560	@ 0x230
  8001fa2:	f5a2 720c 	sub.w	r2, r2, #560	@ 0x230
  8001fa6:	6013      	str	r3, [r2, #0]
+     */
     uint8_t tx[W25Q64_MAX_TRANSFER];
     uint8_t rx[W25Q64_MAX_TRANSFER];
 
@@ -5251,6 +5514,7 @@ HAL_StatusTypeDef W25Q64_Read(
     uint32_t offset = 0U;
  8001fa8:	2300      	movs	r3, #0
  8001faa:	f8c7 322c 	str.w	r3, [r7, #556]	@ 0x22c
+
 
     if (!W25Q64_IsValidHandle(flash))
  8001fae:	f507 730c 	add.w	r3, r7, #560	@ 0x230
@@ -5266,6 +5530,8 @@ HAL_StatusTypeDef W25Q64_Read(
  8001fc4:	e0cb      	b.n	800215e <W25Q64_Read+0x1e6>
     }
 
+
+    /* Nothing to read, so no SPI operation is required. */
     if (length == 0U)
  8001fc6:	f507 730c 	add.w	r3, r7, #560	@ 0x230
  8001fca:	f5a3 730c 	sub.w	r3, r3, #560	@ 0x230
@@ -5276,8 +5542,11 @@ HAL_StatusTypeDef W25Q64_Read(
         return HAL_OK;
  8001fd4:	2300      	movs	r3, #0
  8001fd6:	e0c2      	b.n	800215e <W25Q64_Read+0x1e6>
-    }
 
+    /*
+     * Check that the data buffer is valid and the requested
+     * address range stays within the flash capacity.
+     */
     if ((data == NULL) ||
  8001fd8:	f507 730c 	add.w	r3, r7, #560	@ 0x230
  8001fdc:	f5a3 730b 	sub.w	r3, r3, #556	@ 0x22c
@@ -5307,6 +5576,8 @@ HAL_StatusTypeDef W25Q64_Read(
  8002014:	e0a3      	b.n	800215e <W25Q64_Read+0x1e6>
     }
 
+
+    /* Ensure the flash is ready before starting the read. */
     result = W25Q64_WaitReady(
  8002016:	f507 730c 	add.w	r3, r7, #560	@ 0x230
  800201a:	f5a3 7309 	sub.w	r3, r3, #548	@ 0x224
@@ -5326,8 +5597,9 @@ HAL_StatusTypeDef W25Q64_Read(
         return result;
  8002038:	f897 3223 	ldrb.w	r3, [r7, #547]	@ 0x223
  800203c:	e08f      	b.n	800215e <W25Q64_Read+0x1e6>
-    }
-
+     * Read the requested data in chunks.
+     * offset tracks how many bytes have already been received.
+     */
     while (offset < length)
     {
         uint32_t chunk = length - offset;
@@ -5346,6 +5618,8 @@ HAL_StatusTypeDef W25Q64_Read(
  8002062:	f8c7 321c 	str.w	r3, [r7, #540]	@ 0x21c
         uint32_t i;
 
+
+        /* Limit this SPI transaction to the available buffer size. */
         if (chunk > W25Q64_PAGE_SIZE)
  8002066:	f8d7 3228 	ldr.w	r3, [r7, #552]	@ 0x228
  800206a:	f5b3 7f80 	cmp.w	r3, #256	@ 0x100
@@ -5356,20 +5630,26 @@ HAL_StatusTypeDef W25Q64_Read(
  8002074:	f8c7 3228 	str.w	r3, [r7, #552]	@ 0x228
         }
 
+
+        /* Place the Read Data opcode at the start of the buffer. */
         tx[0] = W25Q64_CMD_READ_DATA;
  8002078:	f507 730c 	add.w	r3, r7, #560	@ 0x230
  800207c:	f5a3 738c 	sub.w	r3, r3, #280	@ 0x118
  8002080:	2203      	movs	r2, #3
  8002082:	701a      	strb	r2, [r3, #0]
 
+
+        /* Add the three memory address bytes after the opcode. */
         W25Q64_PutAddress(
  8002084:	f507 738c 	add.w	r3, r7, #280	@ 0x118
  8002088:	f8d7 121c 	ldr.w	r1, [r7, #540]	@ 0x21c
  800208c:	4618      	mov	r0, r3
  800208e:	f7ff fe6d 	bl	8001d6c <W25Q64_PutAddress>
-            tx,
-            current_address);
-
+         * SPI is full duplex: the STM32 must transmit bytes
+         * to generate clock pulses while receiving flash data.
+         *
+         * 0xFF is used as dummy transmit data during the read.
+         */
         for (i = 0U; i < chunk; i++)
  8002092:	2300      	movs	r3, #0
  8002094:	f8c7 3224 	str.w	r3, [r7, #548]	@ 0x224
@@ -5392,12 +5672,17 @@ HAL_StatusTypeDef W25Q64_Read(
  80020c0:	d3eb      	bcc.n	800209a <W25Q64_Read+0x122>
         }
 
+
         W25Q64_Select(flash);
  80020c2:	f507 730c 	add.w	r3, r7, #560	@ 0x230
  80020c6:	f5a3 7309 	sub.w	r3, r3, #548	@ 0x224
  80020ca:	6818      	ldr	r0, [r3, #0]
  80020cc:	f7ff fe2e 	bl	8001d2c <W25Q64_Select>
 
+        /*
+         * Transfer the four command/address bytes followed
+         * by the dummy bytes. The flash returns its data in rx.
+         */
         result = HAL_SPI_TransmitReceive(
  80020d0:	f507 730c 	add.w	r3, r7, #560	@ 0x230
  80020d4:	f5a3 7309 	sub.w	r3, r3, #548	@ 0x224
@@ -5435,8 +5720,10 @@ HAL_StatusTypeDef W25Q64_Read(
             return result;
  8002114:	f897 3223 	ldrb.w	r3, [r7, #547]	@ 0x223
  8002118:	e021      	b.n	800215e <W25Q64_Read+0x1e6>
-        }
-
+         * command/address phase. Actual memory data begins at rx[4].
+         *
+         * Copy the received data into the caller's RAM buffer.
+         */
         memcpy(
             &data[offset],
  800211a:	f507 730c 	add.w	r3, r7, #560	@ 0x230
@@ -5453,6 +5740,8 @@ HAL_StatusTypeDef W25Q64_Read(
             &rx[W25Q64_COMMAND_SIZE],
             chunk);
 
+
+        /* Move to the next part of the requested address range. */
         offset += chunk;
  800213a:	f8d7 222c 	ldr.w	r2, [r7, #556]	@ 0x22c
  800213e:	f8d7 3228 	ldr.w	r3, [r7, #552]	@ 0x228
@@ -5497,12 +5786,14 @@ HAL_StatusTypeDef W25Q64_Program(
  800218c:	f507 7294 	add.w	r2, r7, #296	@ 0x128
  8002190:	f5a2 7294 	sub.w	r2, r2, #296	@ 0x128
  8002194:	6013      	str	r3, [r2, #0]
+    /* Holds the Page Program command, address and data bytes. */
     uint8_t tx[W25Q64_MAX_TRANSFER];
 
     HAL_StatusTypeDef result;
     uint32_t offset = 0U;
  8002196:	2300      	movs	r3, #0
  8002198:	f8c7 3124 	str.w	r3, [r7, #292]	@ 0x124
+
 
     if (!W25Q64_IsValidHandle(flash))
  800219c:	f507 7394 	add.w	r3, r7, #296	@ 0x128
@@ -5518,6 +5809,7 @@ HAL_StatusTypeDef W25Q64_Program(
  80021b2:	e0c8      	b.n	8002346 <W25Q64_Program+0x1de>
     }
 
+
     if (length == 0U)
  80021b4:	f507 7394 	add.w	r3, r7, #296	@ 0x128
  80021b8:	f5a3 7394 	sub.w	r3, r3, #296	@ 0x128
@@ -5530,6 +5822,8 @@ HAL_StatusTypeDef W25Q64_Program(
  80021c4:	e0bf      	b.n	8002346 <W25Q64_Program+0x1de>
     }
 
+
+    /* Check the input buffer and requested memory range. */
     if ((data == NULL) ||
  80021c6:	f507 7394 	add.w	r3, r7, #296	@ 0x128
  80021ca:	f5a3 7392 	sub.w	r3, r3, #292	@ 0x124
@@ -5557,8 +5851,9 @@ HAL_StatusTypeDef W25Q64_Program(
         return HAL_ERROR;
  8002202:	2301      	movs	r3, #1
  8002204:	e09f      	b.n	8002346 <W25Q64_Program+0x1de>
-    }
-
+    /*
+     * Continue until the entire requested length has been programmed.
+     */
     while (offset < length)
     {
         uint32_t current_address = address + offset;
@@ -5568,7 +5863,9 @@ HAL_StatusTypeDef W25Q64_Program(
  8002210:	f8d7 3124 	ldr.w	r3, [r7, #292]	@ 0x124
  8002214:	4413      	add	r3, r2
  8002216:	f8c7 311c 	str.w	r3, [r7, #284]	@ 0x11c
-
+         * Current offset inside page = 240.
+         * Remaining space = 256 - 240 = 16 bytes.
+         */
         uint32_t page_remaining =
             W25Q64_PAGE_SIZE -
             (current_address % W25Q64_PAGE_SIZE);
@@ -5578,6 +5875,8 @@ HAL_StatusTypeDef W25Q64_Program(
  8002220:	f5c3 7380 	rsb	r3, r3, #256	@ 0x100
  8002224:	f8c7 3118 	str.w	r3, [r7, #280]	@ 0x118
 
+
+        /* Start with all remaining data, then limit it to page space. */
         uint32_t chunk = length - offset;
  8002228:	f507 7394 	add.w	r3, r7, #296	@ 0x128
  800222c:	f5a3 7394 	sub.w	r3, r3, #296	@ 0x128
@@ -5595,8 +5894,11 @@ HAL_StatusTypeDef W25Q64_Program(
             chunk = page_remaining;
  8002248:	f8d7 3118 	ldr.w	r3, [r7, #280]	@ 0x118
  800224c:	f8c7 3120 	str.w	r3, [r7, #288]	@ 0x120
-        }
 
+        /*
+         * Enable programming before sending the Page Program command.
+         * The WEL bit must be set for the write to be accepted.
+         */
         result = W25Q64_WriteEnable(flash);
  8002250:	f507 7394 	add.w	r3, r7, #296	@ 0x128
  8002254:	f5a3 738e 	sub.w	r3, r3, #284	@ 0x11c
@@ -5615,6 +5917,8 @@ HAL_StatusTypeDef W25Q64_Program(
  8002270:	e069      	b.n	8002346 <W25Q64_Program+0x1de>
         }
 
+
+        /* Place the Page Program opcode and starting address in tx. */
         tx[0] = W25Q64_CMD_PAGE_PROGRAM;
  8002272:	f507 7394 	add.w	r3, r7, #296	@ 0x128
  8002276:	f5a3 738c 	sub.w	r3, r3, #280	@ 0x118
@@ -5626,9 +5930,9 @@ HAL_StatusTypeDef W25Q64_Program(
  8002282:	f8d7 111c 	ldr.w	r1, [r7, #284]	@ 0x11c
  8002286:	4618      	mov	r0, r3
  8002288:	f7ff fd70 	bl	8001d6c <W25Q64_PutAddress>
-            tx,
-            current_address);
 
+
+        /* Copy this page's data after the four command/address bytes. */
         memcpy(
             &tx[W25Q64_COMMAND_SIZE],
             &data[offset],
@@ -5645,12 +5949,15 @@ HAL_StatusTypeDef W25Q64_Program(
  80022a8:	f002 fa70 	bl	800478c <memcpy>
             chunk);
 
+
         W25Q64_Select(flash);
  80022ac:	f507 7394 	add.w	r3, r7, #296	@ 0x128
  80022b0:	f5a3 738e 	sub.w	r3, r3, #284	@ 0x11c
  80022b4:	6818      	ldr	r0, [r3, #0]
  80022b6:	f7ff fd39 	bl	8001d2c <W25Q64_Select>
 
+
+        /* Transmit the Page Program command, address and data. */
         result = HAL_SPI_Transmit(
  80022ba:	f507 7394 	add.w	r3, r7, #296	@ 0x128
  80022be:	f5a3 738e 	sub.w	r3, r3, #284	@ 0x11c
@@ -5685,8 +5992,11 @@ HAL_StatusTypeDef W25Q64_Program(
             return result;
  80022f8:	f897 3117 	ldrb.w	r3, [r7, #279]	@ 0x117
  80022fc:	e023      	b.n	8002346 <W25Q64_Program+0x1de>
-        }
-
+        /*
+         * Page Program starts an internal flash operation.
+         * Wait until the BUSY bit clears before programming
+         * another page.
+         */
         result = W25Q64_WaitReady(
  80022fe:	f507 7394 	add.w	r3, r7, #296	@ 0x128
  8002302:	f5a3 738e 	sub.w	r3, r3, #284	@ 0x11c
@@ -5708,6 +6018,8 @@ HAL_StatusTypeDef W25Q64_Program(
  8002320:	e011      	b.n	8002346 <W25Q64_Program+0x1de>
         }
 
+
+        /* Advance the source and destination positions. */
         offset += chunk;
  8002322:	f8d7 2124 	ldr.w	r2, [r7, #292]	@ 0x124
  8002326:	f8d7 3120 	ldr.w	r3, [r7, #288]	@ 0x120
@@ -5731,7 +6043,8 @@ HAL_StatusTypeDef W25Q64_Program(
  800234e:	bd90      	pop	{r4, r7, pc}
 
 08002350 <W25Q64_EraseSector>:
-
+ * Erasing changes all bytes in the sector to 0xFF.
+ */
 HAL_StatusTypeDef W25Q64_EraseSector(
     W25Q64_HandleTypeDef *flash,
     uint32_t sector_address)
@@ -5741,13 +6054,18 @@ HAL_StatusTypeDef W25Q64_EraseSector(
  8002354:	af00      	add	r7, sp, #0
  8002356:	6078      	str	r0, [r7, #4]
  8002358:	6039      	str	r1, [r7, #0]
+    /*
+     * Sector Erase command format:
+     * Byte 0: Opcode (0x20)
+     * Bytes 1-3: 24-bit sector address
+     */
     uint8_t tx[4] = {
  800235a:	2320      	movs	r3, #32
  800235c:	60bb      	str	r3, [r7, #8]
-        0U, 0U, 0U
     };
 
     HAL_StatusTypeDef result;
+
 
     if (!W25Q64_IsValidHandle(flash))
  800235e:	6878      	ldr	r0, [r7, #4]
@@ -5759,8 +6077,11 @@ HAL_StatusTypeDef W25Q64_EraseSector(
         return HAL_ERROR;
  800236a:	2301      	movs	r3, #1
  800236c:	e035      	b.n	80023da <W25Q64_EraseSector+0x8a>
-    }
 
+    /*
+     * The address must be inside the flash and start
+     * at a 4096-byte sector boundary.
+     */
     if ((sector_address >= W25Q64_CAPACITY_BYTES) ||
  800236e:	683b      	ldr	r3, [r7, #0]
  8002370:	f5b3 0f00 	cmp.w	r3, #8388608	@ 0x800000
@@ -5777,6 +6098,8 @@ HAL_StatusTypeDef W25Q64_EraseSector(
  8002382:	e02a      	b.n	80023da <W25Q64_EraseSector+0x8a>
     }
 
+
+    /* Set the Write Enable Latch before erasing. */
     result = W25Q64_WriteEnable(flash);
  8002384:	6878      	ldr	r0, [r7, #4]
  8002386:	f7ff fd0d 	bl	8001da4 <W25Q64_WriteEnable>
@@ -5793,6 +6116,8 @@ HAL_StatusTypeDef W25Q64_EraseSector(
  8002396:	e020      	b.n	80023da <W25Q64_EraseSector+0x8a>
     }
 
+
+    /* Insert the three address bytes after the erase opcode. */
     W25Q64_PutAddress(
  8002398:	f107 0308 	add.w	r3, r7, #8
  800239c:	6839      	ldr	r1, [r7, #0]
@@ -5801,10 +6126,13 @@ HAL_StatusTypeDef W25Q64_EraseSector(
         tx,
         sector_address);
 
+
     W25Q64_Select(flash);
  80023a4:	6878      	ldr	r0, [r7, #4]
  80023a6:	f7ff fcc1 	bl	8001d2c <W25Q64_Select>
 
+
+    /* Send the complete four-byte Sector Erase command. */
     result = HAL_SPI_Transmit(
  80023aa:	687b      	ldr	r3, [r7, #4]
  80023ac:	6818      	ldr	r0, [r3, #0]
@@ -5831,8 +6159,11 @@ HAL_StatusTypeDef W25Q64_EraseSector(
         return result;
  80023ca:	7bfb      	ldrb	r3, [r7, #15]
  80023cc:	e005      	b.n	80023da <W25Q64_EraseSector+0x8a>
-    }
 
+    /*
+     * Sector erasure happens internally inside the flash.
+     * Wait for the BUSY bit to clear before returning.
+     */
     return W25Q64_WaitReady(
  80023ce:	f44f 717a 	mov.w	r1, #1000	@ 0x3e8
  80023d2:	6878      	ldr	r0, [r7, #4]

@@ -20,7 +20,8 @@ The firmware includes a flash memory driver, a RAID-5 storage layer and a UART c
 
 The STM32 acts as the storage controller. A PC communicates with it through a serial terminal using USART2. The firmware processes commands through the application layer, passes storage requests to the RAID engine, and communicates with the four flash chips through the SPI driver.
 
-![System Architecture](docs/images/system-architecture.svg)
+
+![System Architecture](./docs/images/system-architecture.png)
 
 ### Hardware connections
 
@@ -52,7 +53,7 @@ Parity is calculated using the XOR operation:
 
 The parity location rotates between the four flash devices across successive stripes. This distributes parity storage instead of dedicating one device exclusively to parity.
 
-![RAID-5 Data Layout](docs/images/raid5-data-layout.svg)
+![RAID-5 Data Layout](./docs/images/raid5-data-layout.png)
 
 ### Storage specifications
 
@@ -93,7 +94,7 @@ For example, when Flash 1 is unavailable and contains data block D0, the firmwar
 
 The RAID layer reads the required surviving blocks, performs XOR operations and reconstructs the missing data in a RAM buffer.
 
-![Single Member Failure Recovery](docs/images/read-recovery-flow.svg)
+![Single-Member Failure Recovery](./docs/images/read-recovery-flow.png)
 
 ### Operating modes
 

@@ -216,24 +216,9 @@ In a physical failure test, Flash 4 was disconnected and all nine logical blocks
 
 These tests demonstrate the core storage and recovery behaviour, but do not represent exhaustive endurance, performance or reliability qualification.
 
-## 7. Current Limitations
 
-This is an embedded storage prototype intended to demonstrate RAID concepts and firmware development.
 
-The current implementation does not include:
-
-- Automatic rebuilding onto a replacement flash device.
-- Hot-swapping support.
-- A filesystem or USB mass-storage interface.
-- Power-loss protection or transactional stripe updates.
-- Persistent member identity and automatic detection of swapped devices.
-- Checksums for detecting arbitrary corruption in every data block.
-
-A logical block write reads the other two blocks in its stripe, calculates new parity, erases the corresponding sector on all four devices and programs the complete stripe. A failure or power interruption during this sequence may leave an incomplete stripe.
-
-Member availability is checked using the expected JEDEC ID. This confirms that a device responds with the expected identification; it does not verify the health of every memory location.
-
-## 8. Technologies Used
+## 7. Technologies Used
 
 **Hardware:** STM32F401RE, W25Q64FV SPI NOR Flash
 

@@ -1,10 +1,10 @@
-18:43:51 **** Incremental Build of configuration Debug for project RAID ****
+20:13:26 **** Incremental Build of configuration Debug for project RAID ****
 make -j16 all 
 arm-none-eabi-size  RAID.elf 
    text	   data	    bss	    dec	    hex	filename
-  19400	     92	  30788	  50280	   c468	RAID.elf
+  22576	     92	  30796	  53464	   d0d8	RAID.elf
 Finished building: default.size.stdout
  
 
-18:43:51 Build Finished. 0 errors, 0 warnings. (took 263ms)
+20:13:26 Build Finished. 0 errors, 0 warnings. (took 192ms)
 

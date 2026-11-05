@@ -15,9 +15,20 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+
 #include "stdio.h"
 #include "string.h"
+
+#include "w25q64.h"
+#include "raid5.h"
 #include "app_demo.h"
+
+/*
+ * w25q64.h : Interface to the W25Q64 flash driver.
+ * raid5.h  : RAID-5 configuration and storage operations.
+ * app_demo.h: UART storage console interface.
+ */
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -33,13 +44,16 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+
 SPI_HandleTypeDef hspi1;
+
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
+
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
@@ -71,27 +85,66 @@ int main(void)
 
     /* USER CODE BEGIN 2 */
 
-    /* Configuration for the four flash chips */
+    /*
+     * Create a handle for each W25Q64 flash chip.
+     *
+     * All four chips share SPI1 for communication.
+     * Each chip has its own chip-select (CS) pin so the
+     * STM32 can select one flash without selecting the others.
+     *
+     * Each array entry contains:
+     *   SPI handle, GPIO port, CS pin.
+     *
+     * The array index identifies the physical flash:
+     *   flashes[0] -> Flash 1
+     *   flashes[1] -> Flash 2
+     *   flashes[2] -> Flash 3
+     *   flashes[3] -> Flash 4
+     */
     W25Q64_HandleTypeDef flashes[RAID5_DEVICE_COUNT] =
     {
-        {&hspi1, GPIOB, GPIO_PIN_6},  /* Flash 1 */
-        {&hspi1, GPIOC, GPIO_PIN_7},  /* Flash 2 */
-        {&hspi1, GPIOA, GPIO_PIN_9},  /* Flash 3 */
-        {&hspi1, GPIOA, GPIO_PIN_8}   /* Flash 4 */
+        {&hspi1, GPIOB, GPIO_PIN_6},  // Flash 1: PB6
+        {&hspi1, GPIOC, GPIO_PIN_7},  // Flash 2: PC7
+        {&hspi1, GPIOA, GPIO_PIN_9},  // Flash 3: PA9
+        {&hspi1, GPIOA, GPIO_PIN_8}   // Flash 4: PA8
     };
 
-    /* Keep all flash chips deselected */
+
+    /*
+     * The W25Q64 uses an active-low chip-select signal:
+     * LOW  -> Flash selected
+     * HIGH -> Flash deselected
+     *
+     * Keep all four chips deselected before starting
+     * communication over the shared SPI bus.
+     */
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_SET);
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
 
-    /* Run the RAID demonstration once */
-    APP_Demo_Run(&huart2, flashes);
+
+    /*
+     * Start the UART storage console.
+     *
+     * huart2  : Used to receive commands from the PC and
+     *           send responses through USART2.
+     *
+     * flashes : Provides the console and RAID layer with
+     *           the configuration of all four flash chips.
+     *
+     * The console checks the flash devices, initializes RAID-5
+     * and waits for storage commands such as read, write,
+     * status and verify.
+     *
+     * Normal startup does not erase stored data.
+     */
+    APP_Console_Run(&huart2, flashes);
 
     /* USER CODE END 2 */
 
     /* Infinite loop */
+
     /* USER CODE BEGIN WHILE */
     while (1)
     {
@@ -114,6 +167,7 @@ void SystemClock_Config(void)
 
     /* Configure the main internal regulator output voltage */
     __HAL_RCC_PWR_CLK_ENABLE();
+
     __HAL_PWR_VOLTAGESCALING_CONFIG(
         PWR_REGULATOR_VOLTAGE_SCALE2
     );
@@ -235,7 +289,7 @@ static void MX_GPIO_Init(void)
         GPIO_PIN_SET
     );
 
-    /* Configure Flash 2 CS */
+    /* Configure Flash 2 CS: PC7 */
     GPIO_InitStruct.Pin = FLASH_CS2_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -246,7 +300,7 @@ static void MX_GPIO_Init(void)
         &GPIO_InitStruct
     );
 
-    /* Configure Flash 3 and Flash 4 CS */
+    /* Configure Flash 3 and Flash 4 CS: PA9 and PA8 */
     GPIO_InitStruct.Pin = FLASH_CS4_Pin | FLASH_CS3_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -254,7 +308,7 @@ static void MX_GPIO_Init(void)
 
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-    /* Configure Flash 1 CS */
+    /* Configure Flash 1 CS: PB6 */
     GPIO_InitStruct.Pin = FLASH_CS1_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -285,10 +339,11 @@ void Error_Handler(void)
 }
 
 #ifdef USE_FULL_ASSERT
+
 /**
   * @brief Reports the source file and line number of an assert error.
   * @param file: source file name
-  * @param line: source line number
+  * @param line: assert error line number
   */
 void assert_failed(uint8_t *file, uint32_t line)
 {
@@ -297,4 +352,5 @@ void assert_failed(uint8_t *file, uint32_t line)
     (void)line;
     /* USER CODE END 6 */
 }
+
 #endif

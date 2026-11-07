@@ -38,7 +38,7 @@ The STM32 acts as the storage controller. A PC communicates with it through a se
 
 All four flash devices share SPI1. Each device has an independent chip-select signal, allowing the STM32 to communicate with them individually.
 
-![System Architecture](./docs/images/system-architecture.png)
+![System Architecture](./docs/images/IMG_20261107_121555.jpg)
 ## 2. RAID-5 Data Organization
 
 Each W25Q64FV device provides 8 MB of storage. The firmware divides the available memory into 4 KB blocks.

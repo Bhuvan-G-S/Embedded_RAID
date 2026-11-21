@@ -217,6 +217,13 @@ In a physical failure test, Flash 4 was disconnected and all nine logical blocks
 
 These tests demonstrate the core storage and recovery behaviour, but do not represent exhaustive endurance, performance or reliability qualification.
 
+![Failure Recovery Test 1](./docs/images/1.jpg)
+
+![Failure Recovery Test 2](./docs/images/2.jpg)
+
+![Failure Recovery Test 3](./docs/images/3.jpg)
+
+![Failure Recovery Test 4](./docs/images/4.jpg)
 
 
 ## 7. Technologies Used
